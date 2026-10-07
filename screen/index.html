@@ -88,9 +88,7 @@ function render(){
   el("list").innerHTML = ACTIVE.length? ACTIVE.map((a,i)=>{
     const c=byId(a.id);
     return '<div class="row"><span class="pri">'+(i+1)+'</span><span style="flex:1 1 140px">'+c.t+'</span>'
-      + (c.nox? '<span class="tiny">（無需數值）</span>' : '<input type="number" step="any" value="'+a.th+'" onchange="ACTIVE['+i+'].th=parseFloat(this.value)||0">
-
-<span class="tiny">'+c.u+'</span>')
+      + (c.nox? '<span class="tiny">（無需數值）</span>' : '<input type="number" step="any" value="'+a.th+'" onchange="ACTIVE['+i+'].th=parseFloat(this.value)||0"><span class="tiny">'+c.u+'</span>')
       + '<button class="mv" onclick="up('+i+')">↑</button><button class="mv" onclick="down('+i+')">↓</button>'
       + '<button class="x" onclick="del('+i+')">✕</button></div>';
   }).join("") : '<div class="tiny">尚未加入條件（可只按「套用」看全市場）</div>';
@@ -134,7 +132,16 @@ function run(){
 function cfg(){ return {list:ACTIVE.map(a=>({id:a.id,th:a.th})), grp:el("grp").value}; }
 function save(){ const nm=prompt("配方名稱?","我的配方"); if(!nm) return;
   const all=JSON.parse(localStorage.getItem("tw_screen2")||"{}"); all[nm]=cfg(); localStorage.setItem("tw_screen2",JSON.stringify(all)); alert("已存："+nm); }
-function loadCfg(){ const all=JSON.parse(localStorage.getItem("tw_screen2")||"{}"); const ks=Object.keys(all);
+function allCfgs(){
+  const all=JSON.parse(localStorage.getItem("tw_screen2")||"{}");
+  const old=JSON.parse(localStorage.getItem("tw_screen_cfg")||"{}");   // 舊版(勾選式)配方：自動轉換
+  Object.keys(old).forEach(nm=>{ if(all[nm]) return; const o=old[nm]||{}; const list=[];
+    CONDS.forEach(c=>{ const v=o[c.id]; if(v&&v.on){ const th=(v.th===""||v.th==null)?c.d:parseFloat(v.th); list.push({id:c.id, th:isNaN(th)?c.d:th}); } });
+    all[nm]={list:list, grp:o.grp||"", migrated:true};
+  });
+  return all;
+}
+function loadCfg(){ const all=allCfgs(); const ks=Object.keys(all);
   if(!ks.length){ alert("尚無配方"); return; }
   const nm=prompt("載入哪個配方？\n"+ks.join(" / "), ks[0]); if(!nm||!all[nm]) return;
   ACTIVE=(all[nm].list||[]).filter(a=>byId(a.id)); el("grp").value=all[nm].grp||""; render(); run(); }
