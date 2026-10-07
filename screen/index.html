@@ -1,0 +1,124 @@
+<!DOCTYPE html><html lang="zh-Hant"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>台股篩選器</title>
+<style>
+body{font-family:-apple-system,'Noto Sans TC',sans-serif;margin:12px;background:#0f1115;color:#e8e8e8;font-size:14px}
+h1{font-size:17px;margin:4px 0}.sub{color:#9aa0a6;font-size:12px;margin-bottom:10px}
+.nav a{display:inline-block;padding:6px 14px;border:1px solid #2a2f37;border-radius:6px;margin:0 6px 8px 0;font-size:13px;background:#1a1f27;color:#c9d1d9;text-decoration:none}
+.nav a.act{background:#2d6cdf;border-color:#2d6cdf;color:#fff;font-weight:600}
+.card{background:#161a21;border:1px solid #2a2f37;border-radius:8px;padding:10px;margin-bottom:10px}
+.row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #1e232b;flex-wrap:wrap}
+.row:last-child{border-bottom:none}
+.row label{flex:1 1 150px;min-width:130px}
+input[type=number]{width:68px;background:#0f1115;border:1px solid #2a2f37;color:#e8e8e8;border-radius:5px;padding:4px}
+input[type=text]{background:#0f1115;border:1px solid #2a2f37;color:#e8e8e8;border-radius:5px;padding:4px;width:100%}
+.w{width:56px}
+button{background:#2d6cdf;border:none;color:#fff;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:600}
+button.g{background:#232a33;border:1px solid #2a2f37;color:#c9d1d9}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{border:1px solid #2a2f37;padding:4px 6px;text-align:right;white-space:nowrap}
+th{background:#1a1f27;color:#c9d1d9;text-align:right}td.l,th.l{text-align:left}
+.pos{color:#5ee08a}.neg{color:#ff7b72}.warn{color:#ffd166}
+.note{color:#8b949e;font-size:11px;margin-top:8px;line-height:1.6}
+.tiny{font-size:11px;color:#8b949e}
+</style></head><body>
+<h1>台股篩選器</h1>
+<div class="nav"><a href="../">← 日報</a><a href="../us/">美股</a><a class="act">篩選器</a></div>
+<div class="sub" id="meta">載入中…</div>
+
+<div class="card">
+  <div style="font-weight:600;margin-bottom:6px">條件（勾選＝必要條件；「權重」用於排序，0=不影響排序）</div>
+  <div id="conds"></div>
+  <div class="row"><label>族群包含（留空=不限）</label><input type="text" id="grp" placeholder="例：散熱、PCB" style="flex:2 1 200px"></div>
+  <div class="row" style="border:none">
+    <button onclick="run()">套用</button>
+    <button class="g" onclick="reset()">重設</button>
+    <button class="g" onclick="save()">存配方</button>
+    <button class="g" onclick="load()">載入配方</button>
+    <button class="g" onclick="csv()">匯出 CSV</button>
+  </div>
+</div>
+
+<div id="result"></div>
+<div class="note">資料來源：證交所公開資料。條件中的均線／距52週高／量增由每日累積的收盤價計算（資料天數會顯示在上方）。本頁為客觀篩選，非投資建議。</div>
+
+<script>
+const CONDS=[
+ {id:"pct", t:"漲幅 ≥", u:"%", d:3, on:true, w:2, v:s=>s.pct, p:(s,x)=>s.pct>=x},
+ {id:"val", t:"成交金額 ≥", u:"億", d:2, on:false, w:0, v:s=>s.val/1e8, p:(s,x)=>s.val/1e8>=x},
+ {id:"vr",  t:"量增 ≥", u:"倍", d:1.5, on:false, w:1, v:s=>s.vr, p:(s,x)=>s.vr!=null&&s.vr>=x},
+ {id:"ma20",t:"站上 20MA", u:"", d:0, on:false, w:1, v:s=>s.px/(s.ma20||s.px), p:(s)=>s.ma20!=null&&s.px>s.ma20, nox:true},
+ {id:"ma5", t:"站上 5MA",  u:"", d:0, on:false, w:1, v:s=>s.px/(s.ma5||s.px), p:(s)=>s.ma5!=null&&s.px>s.ma5, nox:true},
+ {id:"ma60",t:"站上 60MA", u:"", d:0, on:false, w:1, v:s=>s.px/(s.ma60||s.px), p:(s)=>s.ma60!=null&&s.px>s.ma60, nox:true},
+ {id:"align",t:"均線多頭排列(5>10>20)", u:"", d:0, on:false, w:1, v:s=>0, p:(s)=>s.ma5&&s.ma10&&s.ma20&&s.ma5>s.ma10&&s.ma10>s.ma20, nox:true},
+ {id:"d252",t:"距 52 週高 ≤", u:"%", d:5, on:false, w:2, v:s=>-(s.d252==null?999:s.d252), p:(s,x)=>s.d252!=null&&s.d252>=x, inv:true},
+ {id:"f",   t:"外資買超 ≥", u:"張", d:500, on:false, w:2, v:s=>s.f, p:(s,x)=>s.f!=null&&s.f>=x},
+ {id:"t",   t:"投信買超 ≥", u:"張", d:300, on:false, w:1, v:s=>s.t, p:(s,x)=>s.t!=null&&s.t>=x},
+ {id:"tot", t:"三大買超 ≥", u:"張", d:1000, on:false, w:1, v:s=>s.tot, p:(s,x)=>s.tot!=null&&s.tot>=x},
+ {id:"mag", t:"🟢續強（外資賣超≥500張且漲≥5%）", u:"", d:0, on:false, w:2, v:s=>0, p:(s)=>s.f!=null&&s.f<=-500&&s.pct>=5, nox:true},
+ {id:"loose",t:"🟡鬆動（前一日外資賣超≥500張）", u:"", d:0, on:false, w:-1, v:s=>0, p:(s)=>s.fp!=null&&s.fp<=-500&&s.pct>0, nox:true},
+ {id:"excl",t:"排除 處置/注意股", u:"", d:0, on:true, w:0, v:s=>0, p:(s)=>!s.disp&&!s.note, nox:true},
+ {id:"pmin",t:"股價 ≥", u:"元", d:20, on:false, w:0, v:s=>s.px, p:(s,x)=>s.px>=x},
+ {id:"pmax",t:"股價 ≤", u:"元", d:500, on:false, w:0, v:s=>s.px, p:(s,x)=>s.px<=x},
+ {id:"liq", t:"日成交 ≥", u:"張", d:1000, on:false, w:0, v:s=>s.vol, p:(s,x)=>s.vol>=x}
+];
+let DATA=null, LAST=[];
+function el(id){return document.getElementById(id)}
+function build(){
+  el("conds").innerHTML=CONDS.map(c=>
+   '<div class="row"><label><input type="checkbox" id="on_'+c.id+'"'+(c.on?" checked":"")+'> '+c.t+'</label>'+
+   (c.nox?'<span class="tiny">（無閾值）</span>':'<input type="number" step="any" id="th_'+c.id+'" value="'+c.d+'" style="width:70px"><span class="tiny">'+c.u+'</span>')+
+   '<span class="tiny">權重</span><input type="number" class="w" step="any" id="w_'+c.id+'" value="'+c.w+'"></div>').join("");
+}
+function run(){
+  if(!DATA) return;
+  const act=CONDS.filter(c=>el("on_"+c.id).checked);
+  const g=el("grp").value.trim();
+  let out=DATA.stocks.filter(s=>{
+    if(g && !(s.g||"").includes(g)) return false;
+    for(const c of act){
+      const x=c.nox?0:parseFloat(el("th_"+c.id).value);
+      if(!c.p(s,x)) return false;
+    }
+    return true;
+  });
+  const scored=out.map(s=>{
+    let sc=0;
+    for(const c of act){ const w=parseFloat(el("w_"+c.id).value)||0; if(!w) continue;
+      let v=c.v(s); if(v==null) v=0;
+      if(c.id==="pct"||c.id==="vr"||c.id==="f"||c.id==="t"||c.id==="tot") v=v/Math.max(1,Math.abs(c.d||1));
+      sc+=w*v; }
+    return {s,sc};
+  });
+  scored.sort((a,b)=>b.sc-a.sc);
+  LAST=scored.map(x=>x.s);
+  el("meta").textContent="資料日期 "+DATA.date+"　全市場 "+DATA.stocks.length+" 檔　歷史 "+DATA.hist_days+" 個交易日　→ 符合條件 "+LAST.length+" 檔";
+  const rows=LAST.slice(0,80).map(s=>{
+    const c=s.pct>=0?"pos":"neg", fc=(s.f||0)>=0?"pos":"neg", tc=(s.tot||0)>=0?"pos":"neg";
+    let flag="";
+    if(s.f!=null&&s.f<=-500&&s.pct>=5) flag+="<span class='pos'>🟢續強</span> ";
+    if(s.fp!=null&&s.fp<=-500&&s.pct>0) flag+="<span class='warn'>🟡鬆動</span> ";
+    if(s.disp) flag+="<span class='warn'>🚫處置</span> ";
+    else if(s.note) flag+="<span class='warn'>⚠️注意</span>";
+    return "<tr><td class='l'>"+s.c+"</td><td class='l'>"+s.n+"</td><td class='l'>"+(s.g||"")+"</td>"
+      +"<td>"+s.px+"</td><td class='"+c+"'>"+(s.pct>=0?"+":"")+s.pct+"%</td>"
+      +"<td>"+(s.vr==null?"-":s.vr+"x")+"</td><td>"+(s.d252==null?"-":s.d252+"%")+"</td>"
+      +"<td class='"+fc+"'>"+(s.f==null?"-":s.f)+"</td><td class='"+tc+"'>"+(s.tot==null?"-":s.tot)+"</td>"
+      +"<td>"+(s.marg>0?"+":"")+(s.marg==null?"-":s.marg)+"</td><td class='l'>"+flag+"</td></tr>";
+  }).join("");
+  el("result").innerHTML="<div class='card'><table><tr><th class='l'>代號</th><th class='l'>名稱</th><th class='l'>族群</th><th>收盤</th><th>漲幅</th><th>量增</th><th>距52週高</th><th>外資(張)</th><th>三大(張)</th><th>融資</th><th class='l'>標記</th></tr>"+rows+"</table>"+(LAST.length>80?"<div class='tiny'>（只顯示前 80 檔，可用 CSV 匯出全部）</div>":"")+"</div>";
+}
+function reset(){CONDS.forEach(c=>{el("on_"+c.id).checked=c.on; if(!c.nox) el("th_"+c.id).value=c.d; el("w_"+c.id).value=c.w;}); el("grp").value=""; run();}
+function cfg(){const o={};CONDS.forEach(c=>{o[c.id]={on:el("on_"+c.id).checked,th:c.nox?0:el("th_"+c.id).value,w:el("w_"+c.id).value}});o.grp=el("grp").value;return o}
+function save(){const nm=prompt("配方名稱?","我的配方"); if(!nm) return; const all=JSON.parse(localStorage.getItem("tw_screen_cfg")||"{}"); all[nm]=cfg(); localStorage.setItem("tw_screen_cfg",JSON.stringify(all)); alert("已存:"+nm)}
+function load(){const all=JSON.parse(localStorage.getItem("tw_screen_cfg")||"{}"); const ks=Object.keys(all); if(!ks.length){alert("尚無配方");return} const nm=prompt("載入哪個配方?"+ks.join(" / "),ks[0]); if(!nm||!all[nm])return; const o=all[nm]; CONDS.forEach(c=>{const v=o[c.id]||{}; el("on_"+c.id).checked=!!v.on; if(!c.nox) el("th_"+c.id).value=v.th; el("w_"+c.id).value=v.w}); el("grp").value=o.grp||""; run()}
+function csv(){ if(!LAST.length){alert("沒有結果");return}
+  const h="code,name,group,px,pct,ma5,ma20,ma60,d252,vr,f,t,tot,marg,note,disp";
+  const b=LAST.map(s=>[s.c,s.n,s.g,s.px,s.pct,s.ma5,s.ma20,s.ma60,s.d252,s.vr,s.f,s.t,s.tot,s.marg,s.note,s.disp].join(",")).join("\n");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([h+"\n"+b],{type:"text/csv"})); a.download="screen_"+DATA.date+".csv"; a.click();
+}
+build();
+fetch("../data/screen.json").then(r=>r.json()).then(d=>{DATA=d; if(!d.stocks||!d.stocks.length){el("meta").textContent="尚無資料（今日日報產生後即可使用）";return} run();})
+ .catch(e=>{el("meta").textContent="載入失敗："+e});
+</script></body></html>
