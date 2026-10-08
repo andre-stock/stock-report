@@ -213,6 +213,9 @@ function run(){
   const fmtv = v => (v==null?"-":(Math.abs(v)>=1000?Math.round(v):Math.round(v*100)/100));
   const dyn = (MODE!=="watch" && ACTIVE.length>0);      // 表格欄位跟著你選的條件變動
   const legend = ACTIVE.map((a,i)=>(i+1)+"="+byId(a.id).t+(byId(a.id).num?(" "+a.cmp+" "+a.th+byId(a.id).u):"")).join("　");
+  const limv = parseInt((el("shown")||{}).value || "80", 10);
+  const lim = (limv > 0) ? limv : out.length;
+  const shown = out.slice(0, lim);
   const rows=shown.map(s=>{
     let mcell="";
     if(MODE==="watch"){
@@ -233,9 +236,6 @@ function run(){
       +"<td class='"+fc+"'>"+(s.f==null?"-":s.f)+"</td><td class='"+tc+"'>"+(s.tot==null?"-":s.tot)+"</td>");
     return "<tr>"+baseCells+condCells+fixedCells+"<td class='l'>"+flag+"</td>"+mcell+"</tr>";
   }).join("");
-  const limv = parseInt((el("shown")||{}).value || "80", 10);
-  const lim = (limv > 0) ? limv : out.length;
-  const shown = out.slice(0, lim);
   const heads = ["代號","名稱","族群","收盤","漲幅"]
     .concat(dyn ? ACTIVE.map(a=>{ const c=byId(a.id); return c.t+(c.num?(" "+a.cmp+a.th+c.u):""); }) : ["量增20","距60日高","RSI","週轉率","外資","三大"])
     .concat(["標記"]).concat(MODE==="watch"?["條件"]:[]);
