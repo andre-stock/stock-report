@@ -84,11 +84,11 @@ const CONDS=[
  {id:"kgold",g:"技術指標",t:"KD 黃金交叉",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.kdgold},
  {id:"macdh",g:"技術指標",t:"MACD 柱狀體",u:"",d:0,num:1,cmp:">=",v:s=>s.macdh},
  {id:"bb",g:"技術指標",t:"布林通道 %b",u:"%",d:100,num:1,cmp:">=",v:s=>s.bb},
- {id:"dhi20",g:"技術指標",t:"距 20 日高",u:"%",d:2,num:1,cmp:"<=",v:s=>-(s.dhi20==null?999:s.dhi20)},
- {id:"dhi60",g:"技術指標",t:"距 60 日高",u:"%",d:5,num:1,cmp:"<=",v:s=>-(s.dhi60==null?999:s.dhi60)},
- {id:"dhi120",g:"技術指標",t:"距 120 日高",u:"%",d:10,num:1,cmp:"<=",v:s=>-(s.dhi120==null?999:s.dhi120)},
+ {id:"dhi20",g:"技術指標",t:"距 20 日高",u:"%",d:2,num:1,cmp:"<=",v:s=>s.dhi20},
+ {id:"dhi60",g:"技術指標",t:"距 60 日高",u:"%",d:5,num:1,cmp:"<=",v:s=>s.dhi60},
+ {id:"dhi120",g:"技術指標",t:"距 120 日高",u:"%",d:10,num:1,cmp:"<=",v:s=>s.dhi120},
  {id:"dlo60",g:"技術指標",t:"距 60 日低",u:"%",d:5,num:1,cmp:">=",v:s=>s.dlo60},
- {id:"dhi252",g:"技術指標",t:"距 52 週高",u:"%",d:10,num:1,cmp:"<=",v:s=>-(s.dhi252==null?999:s.dhi252)},
+ {id:"dhi252",g:"技術指標",t:"距 52 週高",u:"%",d:10,num:1,cmp:"<=",v:s=>s.dhi252},
  {id:"dlo252",g:"技術指標",t:"距 52 週低",u:"%",d:20,num:1,cmp:">=",v:s=>s.dlo252},
  {id:"newhi252",g:"技術指標",t:"創 52 週新高",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.newhi252},
  {id:"newhi20",g:"技術指標",t:"創 20 日新高",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.newhi20},
@@ -174,9 +174,12 @@ function run(){
   out=out.slice().sort((A,B)=>{
     if(MODE==="watch"){ const d=matched(B)-matched(A); if(d) return d; }
     for(const a of ACTIVE){ const c=byId(a.id);
-      let va=c.v(A), vb=c.v(B); if(va==null) va=-1e9; if(vb==null) vb=-1e9;
-      const dir=(c.num && a.cmp==="<=")?-1:1;      // ≤ 類條件：數值越小越優先
-      const d=(vb-va)*dir; if(d) return d; }
+      const va=c.v(A), vb=c.v(B);
+      const an=(va==null), bn=(vb==null);
+      if(an!==bn) return an?1:-1;                  // 缺值排最後
+      if(an&&bn) continue;
+      const dir=(c.num && a.cmp==="<=")?1:-1;      // ≤：越小越前；≥：越大越前
+      const d=(va-vb)*dir; if(d) return d; }
     return 0; });
   LAST=out;
   if(MODE==="watch"){
