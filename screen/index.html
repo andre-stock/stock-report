@@ -188,25 +188,35 @@ function run(){
   } else {
     el("meta").textContent="資料日期 "+(DATA.date||"-")+"　全市場 "+DATA.stocks.length+" 檔　歷史 "+DATA.hist_days+" 個交易日　→ 符合 "+out.length+" 檔";
   }
+  const fmtv = v => (v==null?"-":(Math.abs(v)>=1000?Math.round(v):Math.round(v*100)/100));
+  const dyn = (MODE!=="watch" && ACTIVE.length>0);      // 表格欄位跟著你選的條件變動
   const legend = ACTIVE.map((a,i)=>(i+1)+"="+byId(a.id).t+(byId(a.id).num?(" "+a.cmp+" "+a.th+byId(a.id).u):"")).join("　");
   const rows=out.slice(0,80).map(s=>{
     let mcell="";
     if(MODE==="watch"){
-      mcell = "<td class='l'>"+ACTIVE.map((a,i)=>"<span class='"+((a.inv?!pass(s,a):pass(s,a))?"pos'":"neg'")+"'>"+(i+1)+((a.inv?!pass(s,a):pass(s,a))?"✓":"✗")+"</span>").join(" ")+"</td>";
+      mcell = "<td class='l'>"+ACTIVE.map((a,i)=>"<span class='"+(pass(s,a)?"pos'":"neg'")+"'>"+(i+1)+(pass(s,a)?"✓":"✗")+"</span>").join(" ")+"</td>";
     }
     const pc=(s.pct||0)>=0?"pos":"neg", fc=(s.f||0)>=0?"pos":"neg", tc=(s.tot||0)>=0?"pos":"neg";
     let flag="";
     if(s.f!=null&&s.f<=-500&&s.pct>=5) flag+="<span class='pos'>🟢續強</span> ";
     if(s.fp!=null&&s.fp<=-500&&s.pct>0) flag+="<span class='warn'>🟡鬆動</span> ";
     if(s.disp) flag+="<span class='warn'>🚫處置</span> "; else if(s.note) flag+="<span class='warn'>⚠️注意</span>";
-    return "<tr><td class='l'>"+s.c+"</td><td class='l'>"+s.n+"</td><td class='l'>"+(s.g||"")+"</td>"
-      +"<td>"+s.px+"</td><td class='"+pc+"'>"+(s.pct==null?"-":(s.pct>=0?"+":"")+s.pct+"%")+"</td>"
-      +"<td>"+(s.vr20==null?"-":s.vr20+"x")+"</td><td>"+(s.dhi60==null?"-":s.dhi60+"%")+"</td>"
+    const baseCells = "<td class='l'>"+s.c+"</td><td class='l'>"+s.n+"</td><td class='l'>"+(s.g||"")+"</td>"
+      +"<td>"+s.px+"</td><td class='"+pc+"'>"+(s.pct==null?"-":(s.pct>=0?"+":"")+s.pct+"%")+"</td>";
+    const condCells = dyn ? ACTIVE.map(a=>{ const c=byId(a.id);
+        if(!c.num){ const ok=pass(s,a); return "<td class='"+(ok?"pos":"neg")+"'>"+(ok?"✓":"✗")+"</td>"; }
+        return "<td>"+fmtv(c.v(s))+(c.u?(" "+c.u):"")+"</td>"; }).join("") : "";
+    const fixedCells = dyn ? "" : ("<td>"+(s.vr20==null?"-":s.vr20+"x")+"</td><td>"+(s.dhi60==null?"-":s.dhi60+"%")+"</td>"
       +"<td>"+(s.rsi14==null?"-":s.rsi14)+"</td><td>"+(s.turn==null?"-":s.turn+"%")+"</td>"
-      +"<td class='"+fc+"'>"+(s.f==null?"-":s.f)+"</td><td class='"+tc+"'>"+(s.tot==null?"-":s.tot)+"</td>"
-      +"<td class='l'>"+flag+"</td>"+mcell+"</tr>";
+      +"<td class='"+fc+"'>"+(s.f==null?"-":s.f)+"</td><td class='"+tc+"'>"+(s.tot==null?"-":s.tot)+"</td>");
+    return "<tr>"+baseCells+condCells+fixedCells+"<td class='l'>"+flag+"</td>"+mcell+"</tr>";
   }).join("");
-  el("result").innerHTML="<div class='card'>"+(MODE==="watch"&&ACTIVE.length?"<div class='tiny' style='padding:4px 2px'>條件："+legend+"</div>":"")+"<table><tr><th class='l'>代號</th><th class='l'>名稱</th><th class='l'>族群</th><th>收盤</th><th>漲幅</th><th>量增20</th><th>距60日高</th><th>RSI</th><th>週轉率</th><th>外資</th><th>三大</th><th class='l'>標記</th>"+(MODE==="watch"?"<th class='l'>條件</th>":"")+"</tr>"+rows+"</table>"+(out.length>80?"<div class='tiny'>（只顯示前 80 檔，可用 CSV 匯出全部）</div>":"")+"</div>";
+  const heads = ["代號","名稱","族群","收盤","漲幅"]
+    .concat(dyn ? ACTIVE.map(a=>{ const c=byId(a.id); return c.t+(c.num?(" "+a.cmp+a.th+c.u):""); }) : ["量增20","距60日高","RSI","週轉率","外資","三大"])
+    .concat(["標記"]).concat(MODE==="watch"?["條件"]:[]);
+  el("result").innerHTML="<div class='card'>"+(ACTIVE.length?"<div class='tiny' style='padding:4px 2px'>"+(dyn?"表格欄位＝你選的條件　":"條件：")+legend+"</div>":"")
+    +"<table><tr>"+heads.map((h,idx)=>"<th class='"+(idx<3||h==="標記"||h==="條件"?"l":"")+"'>"+h+"</th>").join("")+"</tr>"+rows+"</table>"
+    +(out.length>80?"<div class='tiny'>（只顯示前 80 檔，可用 CSV 匯出全部）</div>":"")+"</div>";
 }
 function cfg(){ return {list:ACTIVE.map(a=>({id:a.id,th:a.th,cmp:a.cmp,inv:a.inv})), grp:el("grp").value}; }
 function allCfgs(){
