@@ -58,6 +58,14 @@ td.l,th.l{text-align:left}
     <button class="g" onclick="save()">存配方</button>
     <button class="g" onclick="loadCfg()">載入配方</button>
     <button class="g" onclick="csv()">匯出 CSV</button>
+    <span class="tiny">顯示</span>
+    <select id="shown" onchange="run()" style="flex:0 0 auto">
+      <option value="80">80</option>
+      <option value="200">200</option>
+      <option value="500">500</option>
+      <option value="0">全部</option>
+    </select>
+    <span class="tiny">筆</span>
   </div>
 </div>
 
@@ -200,12 +208,12 @@ function run(){
     const empty=WATCH.filter(c=>!DATA.stocks.some(s=>s.c===c));
     el("meta").textContent="我的自選股 "+WATCH.length+" 檔　（"+(ACTIVE.length?(out.filter(s=>matched(s)===ACTIVE.length).length+" 檔全部符合"):"尚未設定條件")+"）"+(empty.length?("　⚠️ 查無："+empty.join(",")):"");
   } else {
-    el("meta").textContent="資料日期 "+(DATA.date||"-")+"　全市場 "+DATA.stocks.length+" 檔　歷史 "+DATA.hist_days+" 個交易日　→ 符合 "+out.length+" 檔";
+    el("meta").innerHTML="資料日期 "+(DATA.date||"-")+"　全市場 "+DATA.stocks.length+" 檔　歷史 "+DATA.hist_days+" 個交易日　→ <span class='pos' style='font-weight:700'>符合 "+out.length+" 檔</span>";
   }
   const fmtv = v => (v==null?"-":(Math.abs(v)>=1000?Math.round(v):Math.round(v*100)/100));
   const dyn = (MODE!=="watch" && ACTIVE.length>0);      // 表格欄位跟著你選的條件變動
   const legend = ACTIVE.map((a,i)=>(i+1)+"="+byId(a.id).t+(byId(a.id).num?(" "+a.cmp+" "+a.th+byId(a.id).u):"")).join("　");
-  const rows=out.slice(0,80).map(s=>{
+  const rows=shown.map(s=>{
     let mcell="";
     if(MODE==="watch"){
       mcell = "<td class='l'>"+ACTIVE.map((a,i)=>"<span class='"+(pass(s,a)?"pos'":"neg'")+"'>"+(i+1)+(pass(s,a)?"✓":"✗")+"</span>").join(" ")+"</td>";
@@ -225,12 +233,15 @@ function run(){
       +"<td class='"+fc+"'>"+(s.f==null?"-":s.f)+"</td><td class='"+tc+"'>"+(s.tot==null?"-":s.tot)+"</td>");
     return "<tr>"+baseCells+condCells+fixedCells+"<td class='l'>"+flag+"</td>"+mcell+"</tr>";
   }).join("");
+  const limv = parseInt((el("shown")||{}).value || "80", 10);
+  const lim = (limv > 0) ? limv : out.length;
+  const shown = out.slice(0, lim);
   const heads = ["代號","名稱","族群","收盤","漲幅"]
     .concat(dyn ? ACTIVE.map(a=>{ const c=byId(a.id); return c.t+(c.num?(" "+a.cmp+a.th+c.u):""); }) : ["量增20","距60日高","RSI","週轉率","外資","三大"])
     .concat(["標記"]).concat(MODE==="watch"?["條件"]:[]);
   el("result").innerHTML="<div class='card'>"+(ACTIVE.length?"<div class='tiny' style='padding:4px 2px'>"+(dyn?"表格欄位＝你選的條件　":"條件：")+legend+"</div>":"")
     +"<table><tr>"+heads.map((h,idx)=>"<th class='"+(idx<3||h==="標記"||h==="條件"?"l":"")+"'>"+h+"</th>").join("")+"</tr>"+rows+"</table>"
-    +(out.length>80?"<div class='tiny'>（只顯示前 80 檔，可用 CSV 匯出全部）</div>":"")+"</div>";
+    +(out.length>lim?("<div class='tiny'>（顯示前 "+lim+" 檔／共 "+out.length+" 檔，可用上方「顯示」調整或用 CSV 匯出全部）</div>"):"")+"</div>";
 }
 function cfg(){ return {list:ACTIVE.map(a=>({id:a.id,th:a.th,cmp:a.cmp,inv:a.inv})), grp:el("grp").value}; }
 function allCfgs(){
