@@ -88,6 +88,9 @@ const CONDS=[
  {id:"dhi60",g:"技術指標",t:"距 60 日高",u:"%",d:5,num:1,cmp:"<=",v:s=>-(s.dhi60==null?999:s.dhi60)},
  {id:"dhi120",g:"技術指標",t:"距 120 日高",u:"%",d:10,num:1,cmp:"<=",v:s=>-(s.dhi120==null?999:s.dhi120)},
  {id:"dlo60",g:"技術指標",t:"距 60 日低",u:"%",d:5,num:1,cmp:">=",v:s=>s.dlo60},
+ {id:"dhi252",g:"技術指標",t:"距 52 週高",u:"%",d:10,num:1,cmp:"<=",v:s=>-(s.dhi252==null?999:s.dhi252)},
+ {id:"dlo252",g:"技術指標",t:"距 52 週低",u:"%",d:20,num:1,cmp:">=",v:s=>s.dlo252},
+ {id:"newhi252",g:"技術指標",t:"創 52 週新高",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.newhi252},
  {id:"newhi20",g:"技術指標",t:"創 20 日新高",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.newhi20},
  {id:"newhi60",g:"技術指標",t:"創 60 日新高",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.newhi60},
  {id:"updays",g:"技術指標",t:"連續上漲",u:"天",d:3,num:1,cmp:">=",v:s=>s.updays},
@@ -143,8 +146,8 @@ function render(){
       +'<select onchange="ACTIVE['+i+'].inv=parseInt(this.value)"><option value="0"'+(a.inv?"":" selected")+'>符合</option><option value="1"'+(a.inv?" selected":"")+'>不符合</option></select>'
       +'<button class="mv" onclick="up('+i+')">↑</button><button class="mv" onclick="down('+i+')">↓</button><button class="x" onclick="del('+i+')">✕</button></div>';
     return '<div class="row"><span class="pri">'+(i+1)+'</span><span style="flex:1 1 130px">'+c.t+'</span>'
-      +'<select onchange="ACTIVE['+i+'].cmp=this.value"><option value=">="'+(a.cmp===">="?" selected":"")+'>≥</option><option value="<="'+(a.cmp==="<="?" selected":"")+'>≤</option></select>'
-      +'<input type="number" step="any" value="'+a.th+'" onchange="ACTIVE['+i+'].th=parseFloat(this.value)||0"><span class="tiny">'+c.u+'</span>'
+      +'<select onchange="ACTIVE['+i+'].cmp=this.value; run()"><option value=">="'+(a.cmp===">="?" selected":"")+'>≥</option><option value="<="'+(a.cmp==="<="?" selected":"")+'>≤</option></select>'
+      +'<input type="number" step="any" value="'+a.th+'" onchange="ACTIVE['+i+'].th=parseFloat(this.value)||0; run()"><span class="tiny">'+c.u+'</span>'
       +'<button class="mv" onclick="up('+i+')">↑</button><button class="mv" onclick="down('+i+')">↓</button><button class="x" onclick="del('+i+')">✕</button></div>';
   }).join("") : '<div class="tiny">尚未加入條件（可直接按「套用」看全市場）</div>';
 }
