@@ -53,7 +53,7 @@ td.l,th.l{text-align:left}
   <div class="tiny" id="tip">加入的順序＝優先順序（第 1 條是主要排序依據）；每條都可切 ≤／≥ 或 符合／不符合</div>
   <div class="row"><span class="tiny">族群包含（可留空）</span><input type="text" id="grp" placeholder="例：散熱、PCB、IC設計"></div>
   <div class="row" style="border:none">
-    <button onclick="run()">套用</button>
+    <button onclick="syncAndRun()">套用</button>
     <button class="g" onclick="clearAll()">清空條件</button>
     <button class="g" onclick="save()">存配方</button>
     <button class="g" onclick="loadCfg()">載入配方</button>
@@ -149,11 +149,21 @@ function render(){
       +'<select onchange="ACTIVE['+i+'].inv=parseInt(this.value)"><option value="0"'+(a.inv?"":" selected")+'>符合</option><option value="1"'+(a.inv?" selected":"")+'>不符合</option></select>'
       +'<button class="mv" onclick="up('+i+')">↑</button><button class="mv" onclick="down('+i+')">↓</button><button class="x" onclick="del('+i+')">✕</button></div>';
     return '<div class="row"><span class="pri">'+(i+1)+'</span><span style="flex:1 1 130px">'+c.t+'</span>'
-      +'<select onchange="ACTIVE['+i+'].cmp=this.value; run()"><option value=">="'+(a.cmp===">="?" selected":"")+'>≥</option><option value="<="'+(a.cmp==="<="?" selected":"")+'>≤</option></select>'
-      +'<input type="number" step="any" value="'+a.th+'" onchange="ACTIVE['+i+'].th=parseFloat(this.value)||0; run()"><span class="tiny">'+c.u+'</span>'
+      +'<select id="cmp_'+i+'" onchange="syncAndRun()"><option value=">="'+(a.cmp===">="?" selected":"")+'>≥</option><option value="<="'+(a.cmp==="<="?" selected":"")+'>≤</option></select>'
+      +'<input id="th_'+i+'" type="number" inputmode="decimal" step="any" value="'+a.th+'" oninput="syncAndRun()" onchange="syncAndRun()"><span class="tiny">'+c.u+'</span>'
       +'<button class="mv" onclick="up('+i+')">↑</button><button class="mv" onclick="down('+i+')">↓</button><button class="x" onclick="del('+i+')">✕</button></div>';
   }).join("") : '<div class="tiny">尚未加入條件（可直接按「套用」看全市場）</div>';
 }
+function syncConds(){
+  ACTIVE.forEach(function(a,i){
+    const c=byId(a.id); if(!c||!c.num) return;
+    const t=document.getElementById('th_'+i);
+    if(t){ const v=parseFloat(t.value); if(!isNaN(v)) a.th=v; }
+    const s=document.getElementById('cmp_'+i);
+    if(s && (s.value===">="||s.value==="<=")) a.cmp=s.value;      // 避免讀到空值把比較符號蓋掉
+  });
+}
+function syncAndRun(){ syncConds(); run(); }
 function up(i){ if(i<=0) return; const t=ACTIVE[i-1]; ACTIVE[i-1]=ACTIVE[i]; ACTIVE[i]=t; render(); run(); }
 function down(i){ if(i>=ACTIVE.length-1) return; const t=ACTIVE[i+1]; ACTIVE[i+1]=ACTIVE[i]; ACTIVE[i]=t; render(); run(); }
 function del(i){ ACTIVE.splice(i,1); render(); if(ACTIVE.length) run(); else clearRes(); }
@@ -167,6 +177,7 @@ function pass(s,a){
 }
 function run(){
   if(!DATA) return;
+  try{ syncConds(); }catch(e){}
   const g=el("grp").value.trim();
   let src = (MODE==="watch") ? DATA.stocks.filter(s=>WATCH.indexOf(s.c)>=0) : DATA.stocks;
   const matched = s => { let n=0; for(const a of ACTIVE) if(pass(s,a)) n++; return n; };
