@@ -1,6 +1,9 @@
 <!DOCTYPE html><html lang="zh-Hant"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>台股篩選器</title>
 <style>
 body{font-family:-apple-system,'Noto Sans TC',sans-serif;margin:12px;background:#0f1115;color:#e8e8e8;font-size:14px}
@@ -241,7 +244,7 @@ function csv(){ if(!LAST.length){ alert("沒有結果"); return; }
   const b=LAST.map(s=>keys.map(k=>s[k]==null?"":s[k]).join(",")).join("\n");
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([keys.join(",")+"\n"+b],{type:"text/csv"})); a.download="screen_"+(DATA.date||"")+".csv"; a.click(); }
 loadWatch(); setMode("all"); render();
-fetch("../data/screen.json").then(r=>r.json()).then(d=>{ DATA=d;
+fetch("../data/screen.json?t="+Date.now()).then(r=>r.json()).then(d=>{ DATA=d;
   if(!d.stocks||!d.stocks.length){ el("meta").textContent="尚無資料（日報產生後即可使用）"; return; }
   el("meta").textContent="資料日期 "+(d.date||"-")+"　全市場 "+d.stocks.length+" 檔　歷史 "+d.hist_days+" 個交易日　（可選條件 "+CONDS.length+" 條）"; })
  .catch(e=>{ el("meta").textContent="載入失敗："+e; });
