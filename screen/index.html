@@ -70,7 +70,7 @@ td.l,th.l{text-align:left}
 </div>
 
 <div id="result"></div>
-<div class="note">資料來源：證交所公開資料（日線 130 日、三大法人 130 日）。<br>「距 N 日高」= 目前股價在 N 日高點下方幾 %（越小＝越靠近高點）；「週轉率」= 成交量 ÷ 發行股數。<br>本頁為客觀數據篩選，非投資建議。</div>
+<div class="note">資料來源：證交所公開資料（日線 130 日、三大法人 130 日）。<br>「距 N 日高」= 目前股價在 N 日高點下方幾 %（越小＝越靠近高點）；「週轉率」= 成交量 ÷ 發行股數。<br>「組合配方」＝把多個條件綁成一個勾選項（含歷史判斷），不同於單一指標條件。<br>本頁為客觀數據篩選，非投資建議。</div>
 
 <script>
 const CONDS=[
@@ -80,8 +80,8 @@ const CONDS=[
  {id:"vr5",g:"價格量能",t:"量增（5日均量）",u:"倍",d:1.5,num:1,cmp:">=",v:s=>s.vr5},
  {id:"vr14",g:"價格量能",t:"量比（14日均量）",u:"倍",d:1.5,num:1,cmp:">=",v:s=>s.vr14},
  {id:"vt",g:"價格量能",t:"量能趨勢（5日/14日）",u:"倍",d:1.0,num:1,cmp:">=",v:s=>s.vt},
- {id:"lk",g:"型態",t:"長黑K（實體>1.5×ATR）",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.lk},
- {id:"dist",g:"型態",t:"出貨回檔（爆量後縮量回測月線）",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.dist},
+ {id:"lk",g:"組合配方",t:"長黑K（實體>1.5×ATR）",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.lk},
+ {id:"dist",g:"組合配方",t:"出貨回檔（爆量後縮量回測月線）",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.dist},
  {id:"vr20",g:"價格量能",t:"量增（20日均量）",u:"倍",d:1.5,num:1,cmp:">=",v:s=>s.vr20},
  {id:"vmax20",g:"價格量能",t:"創 20 日最大量",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.vmax20},
  {id:"turn",g:"價格量能",t:"週轉率",u:"%",d:1,num:1,cmp:">=",v:s=>s.turn},
@@ -124,7 +124,7 @@ const CONDS=[
  {id:"loose",g:"籌碼指標",t:"🟡籌碼鬆動（前一日外資賣超≥500張）",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>s.fp!=null&&s.fp<=-500&&s.pct>0},
  {id:"excl",g:"排除",t:"排除 處置／注意股",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!s.disp&&!s.note}
 ];
-const GROUPS=["價格量能","技術指標","籌碼指標","排除"];
+const GROUPS=["組合配方","價格量能","技術指標","籌碼指標","排除"];
 const byId=id=>CONDS.find(c=>c.id===id);
 let DATA=null, ACTIVE=[], LAST=[], MODE="all", WATCH=[];
 function loadWatch(){ try{ WATCH=JSON.parse(localStorage.getItem("tw_watch")||"[]"); }catch(e){ WATCH=[]; } }
