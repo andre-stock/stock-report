@@ -78,6 +78,8 @@ const CONDS=[
  {id:"val",g:"價格量能",t:"成交金額",u:"億",d:2,num:1,cmp:">=",v:s=>(s.val||0)/1e8},
  {id:"vol",g:"價格量能",t:"成交量",u:"張",d:2000,num:1,cmp:">=",v:s=>s.vol||0},
  {id:"vr5",g:"價格量能",t:"量增（5日均量）",u:"倍",d:1.5,num:1,cmp:">=",v:s=>s.vr5},
+ {id:"vr14",g:"價格量能",t:"量比（14日均量）",u:"倍",d:1.5,num:1,cmp:">=",v:s=>s.vr14},
+ {id:"vt",g:"價格量能",t:"量能趨勢（5日/14日）",u:"倍",d:1.0,num:1,cmp:">=",v:s=>s.vt},
  {id:"vr20",g:"價格量能",t:"量增（20日均量）",u:"倍",d:1.5,num:1,cmp:">=",v:s=>s.vr20},
  {id:"vmax20",g:"價格量能",t:"創 20 日最大量",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.vmax20},
  {id:"turn",g:"價格量能",t:"週轉率",u:"%",d:1,num:1,cmp:">=",v:s=>s.turn},
@@ -237,7 +239,7 @@ function run(){
     return "<tr>"+baseCells+condCells+fixedCells+"<td class='l'>"+flag+"</td>"+mcell+"</tr>";
   }).join("");
   const heads = ["代號","名稱","族群","收盤","漲幅"]
-    .concat(dyn ? ACTIVE.map(a=>{ const c=byId(a.id); return c.t+(c.num?(" "+a.cmp+a.th+c.u):""); }) : ["量增20","距60日高","RSI","週轉率","外資","三大"])
+    .concat(dyn ? ACTIVE.map(a=>{ const c=byId(a.id); return c.t+(c.num?(" "+a.cmp+a.th+c.u):""); }) : ["量比14","距60日高","RSI","週轉率","外資","三大"])
     .concat(["標記"]).concat(MODE==="watch"?["條件"]:[]);
   el("result").innerHTML="<div class='card'>"+(ACTIVE.length?"<div class='tiny' style='padding:4px 2px'>"+(dyn?"表格欄位＝你選的條件　":"條件：")+legend+"</div>":"")
     +"<table><tr>"+heads.map((h,idx)=>"<th class='"+(idx<3||h==="標記"||h==="條件"?"l":"")+"'>"+h+"</th>").join("")+"</tr>"+rows+"</table>"
