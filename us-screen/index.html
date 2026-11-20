@@ -1,0 +1,269 @@
+<!DOCTYPE html><html lang="zh-Hant"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>美股篩選器</title>
+<style>
+body{font-family:-apple-system,'Noto Sans TC',sans-serif;margin:12px;background:#0f1115;color:#e8e8e8;font-size:14px}
+h1{font-size:17px;margin:4px 0}.sub{color:#9aa0a6;font-size:12px;margin-bottom:10px}
+.nav a{display:inline-block;padding:6px 14px;border:1px solid #2a2f37;border-radius:6px;margin:0 6px 8px 0;font-size:13px;background:#1a1f27;color:#c9d1d9;text-decoration:none}
+.nav a.act{background:#2d6cdf;border-color:#2d6cdf;color:#fff;font-weight:600}
+.card{background:#161a21;border:1px solid #2a2f37;border-radius:8px;padding:10px;margin-bottom:10px}
+.row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #1e232b;flex-wrap:wrap}
+.row:last-child{border-bottom:none}
+select,input[type=number],input[type=text]{background:#0f1115;border:1px solid #2a2f37;color:#e8e8e8;border-radius:5px;padding:5px}
+select{max-width:100%;font-size:13px}
+input[type=number]{width:70px}
+input[type=text]{width:100%}
+button{background:#2d6cdf;border:none;color:#fff;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:600}
+button.g{background:#232a33;border:1px solid #2a2f37;color:#c9d1d9}
+button.x{background:transparent;border:none;color:#8b949e;font-size:16px;padding:2px 8px}
+button.mv{background:transparent;border:none;color:#8fb8ff;font-size:14px;padding:2px 6px}
+.pri{display:inline-block;min-width:20px;color:#8fb8ff;font-weight:700}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th,td{border:1px solid #2a2f37;padding:4px 6px;text-align:right;white-space:nowrap}
+th{background:#1a1f27;color:#c9d1d9}
+td.l,th.l{text-align:left}
+.pos{color:#5ee08a}.neg{color:#ff7b72}.warn{color:#ffd166}
+.note{color:#8b949e;font-size:11px;margin-top:8px;line-height:1.6}
+.tiny{font-size:11px;color:#8b949e}
+</style></head><body>
+<h1>美股篩選器</h1>
+<div class="nav"><a href="../">← 首頁</a><span class="btn act">美股</span><a href="../us/">美股</a><a class="act">篩選器</a></div>
+<div class="sub" id="meta">載入中…</div>
+
+<div class="card">
+  <div class="row">
+    <button id="mAll" class="g" onclick="setMode('all')" style="flex:0 0 auto">全市場</button>
+    <button id="mWatch" class="g" onclick="setMode('watch')" style="flex:0 0 auto">我的自選股</button>
+    <span class="tiny" id="wcount"></span>
+  </div>
+  <div class="row" id="wrow" style="display:none">
+    <input type="text" id="winput" placeholder="輸入股票代號（可用逗號分隔，例：2330,2317,2454）" style="flex:1 1 180px">
+    <button onclick="addWatch()">＋ 加入自選</button>
+    <button class="g" onclick="watchTools()">清單管理</button>
+  </div>
+  <div class="row">
+    <select id="pick" style="flex:1 1 200px"></select>
+    <button onclick="addCond()">＋ 加入條件</button>
+  </div>
+  <div id="list"></div>
+  <div class="tiny" id="tip">加入的順序＝優先順序（第 1 條是主要排序依據）；每條都可切 ≤／≥ 或 符合／不符合</div>
+  <div class="row"><span class="tiny">族群包含（可留空）</span><input type="text" id="grp" placeholder="例：散熱、PCB、IC設計"></div>
+  <div class="row" style="border:none">
+    <button onclick="syncAndRun()">套用</button>
+    <button class="g" onclick="clearAll()">清空條件</button>
+    <button class="g" onclick="save()">存配方</button>
+    <button class="g" onclick="loadCfg()">載入配方</button>
+    <button class="g" onclick="csv()">匯出 CSV</button>
+    <span class="tiny">顯示</span>
+    <select id="shown" onchange="run()" style="flex:0 0 auto">
+      <option value="80">80</option>
+      <option value="200">200</option>
+      <option value="500">500</option>
+      <option value="0">全部</option>
+    </select>
+    <span class="tiny">筆</span>
+  </div>
+</div>
+
+<div id="result"></div>
+<div class="note">資料來源：證交所公開資料（日線 130 日、三大法人 130 日）。<br>「距 N 日高」= 目前股價在 N 日高點下方幾 %（越小＝越靠近高點）；「週轉率」= 成交量 ÷ 發行股數。<br>「組合配方」＝把多個條件綁成一個勾選項（含歷史判斷），不同於單一指標條件。<br>本頁為客觀數據篩選，非投資建議。</div>
+
+<script>
+const CONDS=[
+ {id:"pct",g:"價格量能",t:"漲幅",u:"%",d:3,num:1,cmp:">=",v:s=>s.pct},
+ {id:"val",g:"價格量能",t:"成交金額",u:"億",d:2,num:1,cmp:">=",v:s=>(s.val||0)/1e8},
+ {id:"vol",g:"價格量能",t:"成交量",u:"張",d:2000,num:1,cmp:">=",v:s=>s.vol||0},
+ {id:"vr5",g:"價格量能",t:"量增（5日均量）",u:"倍",d:1.5,num:1,cmp:">=",v:s=>s.vr5},
+ {id:"vr14",g:"價格量能",t:"量比（14日均量）",u:"倍",d:1.5,num:1,cmp:">=",v:s=>s.vr14},
+ {id:"vt",g:"價格量能",t:"量能趨勢（5日/14日）",u:"倍",d:1.0,num:1,cmp:">=",v:s=>s.vt},
+ {id:"lk",g:"組合配方",t:"長黑K（實體>1.5×ATR）",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.lk},
+ {id:"dist",g:"組合配方",t:"出貨回檔（爆量後縮量回測月線）",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.dist},
+ {id:"xgu",g:"組合配方",t:"均線轉多（10日內三金叉＋多頭排列）",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.xgu},
+ {id:"xgd",g:"組合配方",t:"均線轉空（5日內三死叉＋月線下彎）",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.xgd},
+ {id:"ma240up",g:"組合配方",t:"240均線向上穿越（5日內，日線MA54≈1H）",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.ma240up},
+ {id:"ma240dn",g:"組合配方",t:"240均線向下穿越（5日內，日線MA54≈1H）",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.ma240dn},
+ {id:"vr20",g:"價格量能",t:"量增（20日均量）",u:"倍",d:1.5,num:1,cmp:">=",v:s=>s.vr20},
+ {id:"vmax20",g:"價格量能",t:"創 20 日最大量",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.vmax20},
+ {id:"turn",g:"價格量能",t:"週轉率",u:"%",d:1,num:1,cmp:">=",v:s=>s.turn},
+ {id:"pxmin",g:"價格量能",t:"股價",u:"元",d:20,num:1,cmp:">=",v:s=>s.px},
+ {id:"ma5",g:"技術指標",t:"站上 5MA",u:"",d:0,num:0,cmp:"==",v:s=>(s.ma5?s.px/s.ma5-1:-9),f:s=>s.ma5!=null&&s.px>s.ma5},
+ {id:"ma10",g:"技術指標",t:"站上 10MA",u:"",d:0,num:0,cmp:"==",v:s=>(s.ma10?s.px/s.ma10-1:-9),f:s=>s.ma10!=null&&s.px>s.ma10},
+ {id:"ma20",g:"技術指標",t:"站上 20MA",u:"",d:0,num:0,cmp:"==",v:s=>(s.ma20?s.px/s.ma20-1:-9),f:s=>s.ma20!=null&&s.px>s.ma20},
+ {id:"ma60",g:"技術指標",t:"站上 60MA",u:"",d:0,num:0,cmp:"==",v:s=>(s.ma60?s.px/s.ma60-1:-9),f:s=>s.ma60!=null&&s.px>s.ma60},
+ {id:"ma120",g:"技術指標",t:"站上 120MA",u:"",d:0,num:0,cmp:"==",v:s=>(s.ma120?s.px/s.ma120-1:-9),f:s=>s.ma120!=null&&s.px>s.ma120},
+ {id:"align",g:"技術指標",t:"均線多頭排列（5>10>20）",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>s.ma5&&s.ma10&&s.ma20&&s.ma5>s.ma10&&s.ma10>s.ma20},
+ {id:"ma20up",g:"技術指標",t:"20MA 上揚",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.ma20up},
+ {id:"bias",g:"技術指標",t:"離 20MA 乖離",u:"%",d:5,num:1,cmp:"<=",v:s=>s.bias20},
+ {id:"rsi",g:"技術指標",t:"RSI(14)",u:"",d:70,num:1,cmp:">=",v:s=>s.rsi14},
+ {id:"k",g:"技術指標",t:"KD 的 K 值",u:"",d:80,num:1,cmp:">=",v:s=>s.k},
+ {id:"kgold",g:"技術指標",t:"KD 黃金交叉",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.kdgold},
+ {id:"macdh",g:"技術指標",t:"MACD 柱狀體",u:"",d:0,num:1,cmp:">=",v:s=>s.macdh},
+ {id:"bb",g:"技術指標",t:"布林通道 %b",u:"%",d:100,num:1,cmp:">=",v:s=>s.bb},
+ {id:"dhi20",g:"技術指標",t:"距 20 日高",u:"%",d:2,num:1,cmp:"<=",v:s=>s.dhi20},
+ {id:"dhi60",g:"技術指標",t:"距 60 日高",u:"%",d:5,num:1,cmp:"<=",v:s=>s.dhi60},
+ {id:"dhi120",g:"技術指標",t:"距 120 日高",u:"%",d:10,num:1,cmp:"<=",v:s=>s.dhi120},
+ {id:"dlo60",g:"技術指標",t:"距 60 日低",u:"%",d:5,num:1,cmp:">=",v:s=>s.dlo60},
+ {id:"dhi252",g:"技術指標",t:"距 52 週高",u:"%",d:10,num:1,cmp:"<=",v:s=>s.dhi252},
+ {id:"dlo252",g:"技術指標",t:"距 52 週低",u:"%",d:20,num:1,cmp:">=",v:s=>s.dlo252},
+ {id:"newhi252",g:"技術指標",t:"創 52 週新高",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.newhi252},
+ {id:"newhi20",g:"技術指標",t:"創 20 日新高",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.newhi20},
+ {id:"newhi60",g:"技術指標",t:"創 60 日新高",u:"",d:0,num:0,cmp:"==",v:s=>0,f:s=>!!s.newhi60},
+ {id:"updays",g:"技術指標",t:"連續上漲",u:"天",d:3,num:1,cmp:">=",v:s=>s.updays},
+ {id:"dndays",g:"技術指標",t:"連續下跌",u:"天",d:3,num:1,cmp:">=",v:s=>s.dndays},
+ {id:"vol20",g:"技術指標",t:"20日波動率",u:"%",d:5,num:1,cmp:"<=",v:s=>s.vol20},
+];
+const GROUPS=["組合配方","價格量能","技術指標"];
+const byId=id=>CONDS.find(c=>c.id===id);
+let DATA=null, ACTIVE=[], LAST=[], MODE="all", WATCH=[];
+function loadWatch(){ try{ WATCH=JSON.parse(localStorage.getItem("tw_watch")||"[]"); }catch(e){ WATCH=[]; } }
+function saveWatch(){ localStorage.setItem("tw_watch", JSON.stringify(WATCH)); }
+function setMode(m){ MODE=m; el("wrow").style.display=(m==="watch")?"flex":"none";
+  el("mAll").className=(m==="all")?"":"g"; el("mWatch").className=(m==="watch")?"":"g";
+  el("wcount").textContent=(m==="watch")?("（"+WATCH.length+" 檔）"):""; run(); }
+function addWatch(){ const v=el("winput").value.trim(); if(!v) return;
+  const parts=v.split(/[ ,，、]+/).filter(Boolean);
+  parts.forEach(p=>{ const c=p.replace(/[^0-9A-Za-z]/g,""); if(c && WATCH.indexOf(c)<0) WATCH.push(c); });
+  saveWatch(); el("winput").value=""; el("wcount").textContent="（"+WATCH.length+" 檔）"; run(); }
+function watchTools(){
+  const a=prompt("清單管理：\n1) 匯出（複製下面文字）\n2) 匯入（貼上代號）\n3) 清空\n輸入 1/2/3：","1");
+  if(a==="1"){ const csv=WATCH.join(","); navigator.clipboard&&navigator.clipboard.writeText(csv); prompt("已複製（若沒有請手動複製）：",csv); }
+  else if(a==="2"){ const v=prompt("貼上代號（逗號分隔）：",WATCH.join(","))||""; WATCH=v.split(/[ ,，、]+/).filter(Boolean).filter((x,i,arr)=>arr.indexOf(x)===i); saveWatch(); setMode("watch"); }
+  else if(a==="3"){ WATCH=[]; saveWatch(); setMode("watch"); }
+}
+const el=id=>document.getElementById(id);
+function fillPick(){
+  let h='<option value="">— 選擇條件 —</option>';
+  GROUPS.forEach(g=>{
+    const items=CONDS.filter(c=>c.g===g && !ACTIVE.some(a=>a.id===c.id));
+    if(items.length) h+='<optgroup label="'+g+'">'+items.map(c=>'<option value="'+c.id+'">'+c.t+'</option>').join("")+'</optgroup>';
+  });
+  el("pick").innerHTML=h;
+}
+function addCond(){ const id=el("pick").value; if(!id) return;
+  const c=byId(id); ACTIVE.push({id:id, th:c.d, cmp:c.cmp, inv:0}); render(); if(ACTIVE.length) run(); }
+function render(){
+  fillPick();
+  el("list").innerHTML=ACTIVE.length? ACTIVE.map((a,i)=>{
+    const c=byId(a.id);
+    if(!c.num) return '<div class="row"><span class="pri">'+(i+1)+'</span><span style="flex:1 1 150px">'+c.t+'</span>'
+      +'<select onchange="ACTIVE['+i+'].inv=parseInt(this.value)"><option value="0"'+(a.inv?"":" selected")+'>符合</option><option value="1"'+(a.inv?" selected":"")+'>不符合</option></select>'
+      +'<button class="mv" onclick="up('+i+')">↑</button><button class="mv" onclick="down('+i+')">↓</button><button class="x" onclick="del('+i+')">✕</button></div>';
+    return '<div class="row"><span class="pri">'+(i+1)+'</span><span style="flex:1 1 130px">'+c.t+'</span>'
+      +'<select id="cmp_'+i+'" onchange="syncAndRun()"><option value=">="'+(a.cmp===">="?" selected":"")+'>≥</option><option value="<="'+(a.cmp==="<="?" selected":"")+'>≤</option></select>'
+      +'<input id="th_'+i+'" type="number" inputmode="decimal" step="any" value="'+a.th+'" oninput="syncAndRun()" onchange="syncAndRun()"><span class="tiny">'+c.u+'</span>'
+      +'<button class="mv" onclick="up('+i+')">↑</button><button class="mv" onclick="down('+i+')">↓</button><button class="x" onclick="del('+i+')">✕</button></div>';
+  }).join("") : '<div class="tiny">尚未加入條件（可直接按「套用」看全市場）</div>';
+}
+function syncConds(){
+  ACTIVE.forEach(function(a,i){
+    const c=byId(a.id); if(!c||!c.num) return;
+    const t=document.getElementById('th_'+i);
+    if(t){ const v=parseFloat(t.value); if(!isNaN(v)) a.th=v; }
+    const s=document.getElementById('cmp_'+i);
+    if(s && (s.value===">="||s.value==="<=")) a.cmp=s.value;      // 避免讀到空值把比較符號蓋掉
+  });
+}
+function syncAndRun(){ syncConds(); run(); }
+function up(i){ if(i<=0) return; const t=ACTIVE[i-1]; ACTIVE[i-1]=ACTIVE[i]; ACTIVE[i]=t; render(); run(); }
+function down(i){ if(i>=ACTIVE.length-1) return; const t=ACTIVE[i+1]; ACTIVE[i+1]=ACTIVE[i]; ACTIVE[i]=t; render(); run(); }
+function del(i){ ACTIVE.splice(i,1); render(); if(ACTIVE.length) run(); else clearRes(); }
+function clearAll(){ ACTIVE=[]; el("grp").value=""; render(); clearRes(); }
+function clearRes(){ el("result").innerHTML=""; if(DATA) el("meta").textContent="資料日期 "+(DATA.date||"-")+"　全市場 "+DATA.stocks.length+" 檔　（未加條件）"; }
+function pass(s,a){
+  const c=byId(a.id);
+  if(!c.num){ const r=c.f(s); return a.inv? !r : r; }
+  const v=c.v(s); if(v==null) return false;
+  const x=a.th; return a.cmp==="<=" ? v<=x : v>=x;
+}
+function run(){
+  if(!DATA) return;
+  try{ syncConds(); }catch(e){}
+  const g=el("grp").value.trim();
+  let src = (MODE==="watch") ? DATA.stocks.filter(s=>WATCH.indexOf(s.c)>=0) : DATA.stocks;
+  const matched = s => { let n=0; for(const a of ACTIVE) if(pass(s,a)) n++; return n; };
+  let out;
+  if(MODE==="watch"){ out = src.slice(); }            // 自選股：不過濾，只標示符合哪些
+  else { out = src.filter(s=>{ if(g && !(s.g||"").includes(g)) return false;
+    for(const a of ACTIVE) if(!pass(s,a)) return false; return true; }); }
+  out=out.slice().sort((A,B)=>{
+    if(MODE==="watch"){ const d=matched(B)-matched(A); if(d) return d; }
+    for(const a of ACTIVE){ const c=byId(a.id);
+      const va=c.v(A), vb=c.v(B);
+      const an=(va==null), bn=(vb==null);
+      if(an!==bn) return an?1:-1;                  // 缺值排最後
+      if(an&&bn) continue;
+      const dir=(c.num && a.cmp==="<=")?1:-1;      // ≤：越小越前；≥：越大越前
+      const d=(va-vb)*dir; if(d) return d; }
+    return 0; });
+  LAST=out;
+  if(MODE==="watch"){
+    const empty=WATCH.filter(c=>!DATA.stocks.some(s=>s.c===c));
+    el("meta").textContent="我的自選股 "+WATCH.length+" 檔　（"+(ACTIVE.length?(out.filter(s=>matched(s)===ACTIVE.length).length+" 檔全部符合"):"尚未設定條件")+"）"+(empty.length?("　⚠️ 查無："+empty.join(",")):"");
+  } else {
+    el("meta").innerHTML="資料日期 "+(DATA.date||"-")+"　全市場 "+DATA.stocks.length+" 檔　歷史 "+DATA.hist_days+" 個交易日　→ <span class='pos' style='font-weight:700'>符合 "+out.length+" 檔</span>";
+  }
+  const fmtv = v => (v==null?"-":(Math.abs(v)>=1000?Math.round(v):Math.round(v*100)/100));
+  const dyn = (MODE!=="watch" && ACTIVE.length>0);      // 表格欄位跟著你選的條件變動
+  const legend = ACTIVE.map((a,i)=>(i+1)+"="+byId(a.id).t+(byId(a.id).num?(" "+a.cmp+" "+a.th+byId(a.id).u):"")).join("　");
+  const limv = parseInt((el("shown")||{}).value || "80", 10);
+  const lim = (limv > 0) ? limv : out.length;
+  const shown = out.slice(0, lim);
+  const rows=shown.map(s=>{
+    let mcell="";
+    if(MODE==="watch"){
+      mcell = "<td class='l'>"+ACTIVE.map((a,i)=>"<span class='"+(pass(s,a)?"pos'":"neg'")+"'>"+(i+1)+(pass(s,a)?"✓":"✗")+"</span>").join(" ")+"</td>";
+    }
+    const pc=(s.pct||0)>=0?"pos":"neg", fc=(s.f||0)>=0?"pos":"neg", tc=(s.tot||0)>=0?"pos":"neg";
+    let flag="";
+    if(s.f!=null&&s.f<=-500&&s.pct>=5) flag+="<span class='pos'>🟢續強</span> ";
+    if(s.fp!=null&&s.fp<=-500&&s.pct>0) flag+="<span class='warn'>🟡鬆動</span> ";
+    if(s.disp) flag+="<span class='warn'>🚫處置</span> "; else if(s.note) flag+="<span class='warn'>⚠️注意</span>";
+    const baseCells = "<td class='l'>"+s.c+"</td><td class='l'>"+s.n+"</td><td class='l'>"+(s.g||"")+"</td>"
+      +"<td>"+s.px+"</td><td class='"+pc+"'>"+(s.pct==null?"-":(s.pct>=0?"+":"")+s.pct+"%")+"</td>";
+    const condCells = dyn ? ACTIVE.map(a=>{ const c=byId(a.id);
+        if(!c.num){ const ok=pass(s,a); return "<td class='"+(ok?"pos":"neg")+"'>"+(ok?"✓":"✗")+"</td>"; }
+        return "<td>"+fmtv(c.v(s))+(c.u?(" "+c.u):"")+"</td>"; }).join("") : "";
+    const fixedCells = dyn ? "" : ("<td>"+(s.vr20==null?"-":s.vr20+"x")+"</td><td>"+(s.dhi60==null?"-":s.dhi60+"%")+"</td>"
+      +"<td>"+(s.rsi14==null?"-":s.rsi14)+"</td><td>"+(s.turn==null?"-":s.turn+"%")+"</td>"
+      +"<td class='"+fc+"'>"+(s.f==null?"-":s.f)+"</td><td class='"+tc+"'>"+(s.tot==null?"-":s.tot)+"</td>");
+    return "<tr>"+baseCells+condCells+fixedCells+"<td class='l'>"+flag+"</td>"+mcell+"</tr>";
+  }).join("");
+  const heads = ["代號","名稱","族群","收盤","漲幅"]
+    .concat(dyn ? ACTIVE.map(a=>{ const c=byId(a.id); return c.t+(c.num?(" "+a.cmp+a.th+c.u):""); }) : ["量比14","距60日高","RSI","週轉率","外資","三大"])
+    .concat(["標記"]).concat(MODE==="watch"?["條件"]:[]);
+  el("result").innerHTML="<div class='card'>"+(ACTIVE.length?"<div class='tiny' style='padding:4px 2px'>"+(dyn?"表格欄位＝你選的條件　":"條件：")+legend+"</div>":"")
+    +"<table><tr>"+heads.map((h,idx)=>"<th class='"+(idx<3||h==="標記"||h==="條件"?"l":"")+"'>"+h+"</th>").join("")+"</tr>"+rows+"</table>"
+    +(out.length>lim?("<div class='tiny'>（顯示前 "+lim+" 檔／共 "+out.length+" 檔，可用上方「顯示」調整或用 CSV 匯出全部）</div>"):"")+"</div>";
+}
+function cfg(){ return {list:ACTIVE.map(a=>({id:a.id,th:a.th,cmp:a.cmp,inv:a.inv})), grp:el("grp").value}; }
+function allCfgs(){
+  const all=JSON.parse(localStorage.getItem("tw_screen2")||"{}");
+  const old=JSON.parse(localStorage.getItem("tw_screen_cfg")||"{}");
+  Object.keys(old).forEach(nm=>{ if(all[nm]) return; const o=old[nm]||{}; const list=[];
+    CONDS.forEach(c=>{ const v=o[c.id]; if(v&&v.on){ const th=(v.th===""||v.th==null)?c.d:parseFloat(v.th);
+      if(c.id==="d252"){ list.push({id:"dhi60", th:(isNaN(th)?5:th), cmp:"<=", inv:0}); return; }
+      list.push({id:c.id, th:isNaN(th)?c.d:th, cmp:c.cmp, inv:0}); } });
+    all[nm]={list:list, grp:o.grp||"", migrated:true}; });
+  return all;
+}
+function save(){ const nm=prompt("配方名稱?","我的配方"); if(!nm) return;
+  const all=JSON.parse(localStorage.getItem("tw_screen2")||"{}"); all[nm]=cfg(); localStorage.setItem("tw_screen2",JSON.stringify(all)); alert("已存："+nm); }
+function loadCfg(){ const all=allCfgs(); const ks=Object.keys(all);
+  if(!ks.length){ alert("尚無配方"); return; }
+  const nm=prompt("載入哪個配方？\n"+ks.join(" / "), ks[0]); if(!nm||!all[nm]) return;
+  ACTIVE=(all[nm].list||[]).filter(a=>byId(a.id)).map(a=>({id:a.id, th:a.th, cmp:a.cmp||byId(a.id).cmp, inv:a.inv||0}));
+  el("grp").value=all[nm].grp||""; render(); run(); }
+function csv(){ if(!LAST.length){ alert("沒有結果"); return; }
+  const keys=["c","n","g","px","pct","vol","val","ma5","ma20","ma60","bias20","rsi14","k","d","macdh","bb","dhi20","dhi60","dhi120","dlo60","vr5","vr20","turn","vol20","updays","dndays","f","t","tot","fstreak","tstreak","astreak","ratio","marg","note","disp"];
+  const b=LAST.map(s=>keys.map(k=>s[k]==null?"":s[k]).join(",")).join("\n");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([keys.join(",")+"\n"+b],{type:"text/csv"})); a.download="screen_"+(DATA.date||"")+".csv"; a.click(); }
+loadWatch(); setMode("all"); render();
+fetch("../data/us_screen.json?t="+Date.now()).then(r=>r.json()).then(d=>{ DATA=d;
+  if(!d.stocks||!d.stocks.length){ el("meta").textContent="尚無資料（日報產生後即可使用）"; return; }
+  el("meta").textContent="資料日期 "+(d.date||"-")+"　全市場 "+d.stocks.length+" 檔　歷史 "+d.hist_days+" 個交易日　（可選條件 "+CONDS.length+" 條）"; })
+ .catch(e=>{ el("meta").textContent="載入失敗："+e; });
+</script></body></html>
