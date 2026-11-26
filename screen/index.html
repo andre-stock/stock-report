@@ -351,25 +351,11 @@ function draw(bars){
   if(window.ResizeObserver){ new ResizeObserver(function(){ ch.applyOptions({width:box.clientWidth,height:box.clientHeight}); }).observe(box); }
 }
 function liveQuote(code, cb){
-  var mis="https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_"+code+".tw&json=1&delay=0&_="+Date.now();
-  var urls=[
-    "https://api.allorigins.win/raw?url="+encodeURIComponent(mis),
-    "https://api.codetabs.com/v1/proxy?quest="+encodeURIComponent(mis)
-  ];
-  var i=0;
-  function tryNext(){
-    if(i>=urls.length){ cb(null); return; }
-    var u=urls[i++];
-    var ctl=(window.AbortController)?new AbortController():null;
-    var tm=setTimeout(function(){ if(ctl) ctl.abort(); }, 8000);
-    fetch(u,{signal:ctl?ctl.signal:undefined}).then(function(r){return r.text();}).then(function(t){
-      clearTimeout(tm);
-      var j=null; try{ j=JSON.parse(t); }catch(e){ try{ j=JSON.parse(t.slice(t.indexOf("{"))); }catch(e2){} }
-      var m=j&&j.msgArray&&j.msgArray[0];
-      if(m && m.c){ cb(m); } else { tryNext(); }
-    }).catch(function(){ clearTimeout(tm); tryNext(); });
-  }
-  tryNext();
+  fetch("../data/rt.json?t="+Date.now()).then(function(r){ return r.json(); }).then(function(d){
+    var a=(d&&d.q)?d.q[code]:null;
+    if(!a){ cb(null); return; }
+    cb({o:a[0],h:a[1],l:a[2],z:a[3],v:a[4],d:a[5],t:a[6]});
+  }).catch(function(){ cb(null); });
 }
 function applyLive(m){
   if(!m || !LCCS) return;
@@ -384,7 +370,7 @@ function applyLive(m){
   LCCS.update(bar);
   LCVOL.update({time:bar.time,value:v,color:(z>=o?"rgba(246,70,93,.45)":"rgba(14,203,129,.45)")});
   var t=m.t||""; 
-  el("charthint").textContent="日線 · 即時 "+t.slice(0,5)+"（延遲約 1 分）";
+  el("charthint").textContent="日線 · 即時 "+t.slice(0,5)+"（延遲 ≤5 分）";
 }
 function startLive(code){
   stopLive();
