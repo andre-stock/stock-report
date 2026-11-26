@@ -82,11 +82,11 @@ tr.clk{cursor:pointer}tr.clk:hover td{background:#1c2431}
 <div id="result"></div>
 <div id="chartwrap"><div id="chartcard">
   <div id="charthead">
-    <span id="chartname">—</span><span class="tiny" id="charthint">點表格任一列即可看 K 線</span>
+    <span id="chartname">—</span><span class="tiny" id="charthint">點表格任一列即可看 K 線（台股為日線）</span>
     <span style="flex:1"></span>
     <button class="ivb on" data-iv="D" onclick="setIv('D',this)">日K</button>
-    <button class="ivb" data-iv="60" onclick="setIv('60',this)">60分</button>
-    <button class="ivb" data-iv="15" onclick="setIv('15',this)">15分</button>
+    <button class="ivb" data-iv="W" onclick="setIv('W',this)">週K</button>
+    
     <a class="ivb" id="tvlink" target="_blank" rel="noopener" href="#">TradingView ↗</a>
     <button class="ivb" onclick="hideChart()">✕ 關閉</button>
   </div>
@@ -295,42 +295,82 @@ function csv(){ if(!LAST.length){ alert("沒有結果"); return; }
   const keys=["c","n","g","px","pct","vol","val","ma5","ma20","ma60","bias20","rsi14","k","d","macdh","bb","dhi20","dhi60","dhi120","dlo60","vr5","vr20","turn","vol20","updays","dndays","f","t","tot","fstreak","tstreak","astreak","ratio","marg","note","disp"];
   const b=LAST.map(s=>keys.map(k=>s[k]==null?"":s[k]).join(",")).join("\n");
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([keys.join(",")+"\n"+b],{type:"text/csv"})); a.download="screen_"+(DATA.date||"")+".csv"; a.click(); }
-var MKT="TW", CURCODE=null, CURIV="D";
-function tvSym(code){ return (MKT==="US") ? code : ("TWSE:"+code); }
-function renderTV(sym){
-  var box=el("chartbox"); box.innerHTML="";
-  var c=document.createElement("div");
-  c.className="tradingview-widget-container"; c.style.cssText="height:100%;width:100%";
-  var inner=document.createElement("div");
-  inner.className="tradingview-widget-container__widget"; inner.style.cssText="height:100%;width:100%";
-  c.appendChild(inner);
+var CURCODE=null, CURIV="D", BARS={}, LCCHART=null;
+function loadLC(cb){
+  if(window.LightweightCharts) return cb();
+  if(window.__lcWait){ setTimeout(function(){loadLC(cb);},250); return; }
+  window.__lcWait=true;
   var s=document.createElement("script");
-  s.type="text/javascript"; s.async=true;
-  s.src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
-  s.textContent=JSON.stringify({
-    autosize:true, symbol:sym, interval:CURIV,
-    timezone:(MKT==="US"?"America/New_York":"Asia/Taipei"),
-    theme:"dark", style:"1", locale:"zh_TW", toolbar_bg:"#0f1115",
-    enable_publishing:false, hide_side_toolbar:false, allow_symbol_change:true,
-    withdateranges:true, save_image:false, studies:["Volume@tv-basicstudies"],
-    support_host:"https://www.tradingview.com"
+  s.src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js";
+  s.onload=function(){ cb(); };
+  s.onerror=function(){ el("charthint").textContent="圖表元件載入失敗（CDN 被擋）"; window.__lcWait=false; };
+  document.head.appendChild(s);
+}
+function dstr(d){ return d.slice(0,4)+"-"+d.slice(4,6)+"-"+d.slice(6,8); }
+function weekly(bars){
+  var out=[], cur=null, wk=null;
+  bars.forEach(function(b){
+    var y=+b[0].slice(0,4), m=+b[0].slice(4,6)-1, dd=+b[0].slice(6,8);
+    var dt=new Date(Date.UTC(y,m,dd)); var dow=(dt.getUTCDay()+6)%7;
+    var mon=new Date(Date.UTC(y,m,dd-dow)); var key=mon.toISOString().slice(0,10);
+    if(!cur || cur.k!==key){ if(cur) out.push(cur.b); cur={k:key,b:[b[0],b[1],b[2],b[3],b[4],b[5]]}; }
+    else { var x=cur.b; if(b[2]>x[2])x[2]=b[2]; if(b[3]<x[3])x[3]=b[3]; x[4]=b[4]; x[5]+=b[5]; }
   });
-  c.appendChild(s);
-  box.appendChild(c);
+  if(cur) out.push(cur.b);
+  return out;
+}
+function maLine(bars,n){
+  var out=[], sum=0;
+  for(var i=0;i<bars.length;i++){ sum+=bars[i][4]; if(i>=n) sum-=bars[i-n][4]; if(i>=n-1) out.push({time:dstr(bars[i][0]), value:sum/n}); }
+  return out;
+}
+function draw(bars){
+  var box=el("chartbox"); box.innerHTML="";
+  if(!bars || !bars.length){ box.innerHTML="<div class='tiny' style='padding:20px'>此股沒有歷史資料</div>"; return; }
+  if(LCCHART){ try{LCCHART.remove();}catch(e){} LCCHART=null; }
+  var ch=LightweightCharts.createChart(box,{
+    width:box.clientWidth, height:box.clientHeight,
+    layout:{background:{type:"solid",color:"#0f1115"},textColor:"#c9d1d9",fontSize:11},
+    grid:{vertLines:{color:"#1a1f27"},horzLines:{color:"#1a1f27"}},
+    rightPriceScale:{borderColor:"#2a2f37"}, timeScale:{borderColor:"#2a2f37",rightOffset:3},
+    crosshair:{mode:0}
+  });
+  LCCHART=ch;
+  var cs=ch.addCandlestickSeries({upColor:"#f6465d",downColor:"#0ecb81",borderUpColor:"#f6465d",borderDownColor:"#0ecb81",wickUpColor:"#f6465d",wickDownColor:"#0ecb81"});
+  cs.setData(bars.map(function(b){return {time:dstr(b[0]),open:b[1],high:b[2],low:b[3],close:b[4]};}));
+  var vol=ch.addHistogramSeries({priceFormat:{type:"volume"},priceScaleId:"",priceLineVisible:false,lastValueVisible:false});
+  vol.priceScale().applyOptions({scaleMargins:{top:0.82,bottom:0}});
+  vol.setData(bars.map(function(b){return {time:dstr(b[0]),value:b[5],color:(b[4]>=b[1]?"rgba(246,70,93,.45)":"rgba(14,203,129,.45)")};}));
+  var m5=ch.addLineSeries({color:"#ffb454",lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+  m5.setData(maLine(bars,5));
+  var m20=ch.addLineSeries({color:"#6cb6ff",lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+  m20.setData(maLine(bars,20));
+  ch.timeScale().fitContent();
+  if(window.ResizeObserver){ new ResizeObserver(function(){ ch.applyOptions({width:box.clientWidth,height:box.clientHeight}); }).observe(box); }
 }
 function showChart(code){
-  var arr=(DATA&&DATA.stocks)?DATA.stocks:[];
-  var s=null; for(var i=0;i<arr.length;i++){ if(arr[i].c===code){ s=arr[i]; break; } }
+  var arr=(DATA&&DATA.stocks)?DATA.stocks:[]; var s=null;
+  for(var i=0;i<arr.length;i++){ if(arr[i].c===code){ s=arr[i]; break; } }
   if(!s) s={c:code,n:""};
   CURCODE=code;
   el("chartwrap").style.display="block";
   el("chartname").textContent=code+"  "+(s.n||"");
-  el("charthint").textContent=(MKT==="US")?"美股 · TradingView":"台股 · TradingView";
-  el("tvlink").href="https://www.tradingview.com/chart/?symbol="+encodeURIComponent(tvSym(code));
-  renderTV(tvSym(code));
+  el("charthint").textContent=(CURIV==="W"?"週線":"日線")+" · 自建圖表（點右上可開 TradingView）";
+  el("tvlink").href="https://www.tradingview.com/chart/?symbol="+encodeURIComponent("TWSE:"+code);
+  loadLC(function(){
+    var k=code.slice(0,2);
+    function render(bars){ draw(CURIV==="W"?weekly(bars||[]):(bars||[])); }
+    if(BARS[k]){ render(BARS[k][code]); }
+    else {
+      el("chartbox").innerHTML="<div class='tiny' style='padding:20px'>載入中…</div>";
+      fetch("../data/tw_bars/"+k+".json?t="+Date.now()).then(function(r){return r.json();})
+        .then(function(d){ BARS[k]=d; render(d[code]); })
+        .catch(function(e){ el("chartbox").innerHTML="<div class='tiny' style='padding:20px'>歷史資料載入失敗</div>"; });
+    }
+  });
   try{ el("chartwrap").scrollIntoView({behavior:"smooth",block:"nearest"}); }catch(e){}
 }
-function hideChart(){ el("chartwrap").style.display="none"; el("chartbox").innerHTML=""; CURCODE=null; }
+function hideChart(){ el("chartwrap").style.display="none"; el("chartbox").innerHTML=""; if(LCCHART){try{LCCHART.remove();}catch(e){}LCCHART=null;} CURCODE=null; }
 function setIv(iv,btn){
   CURIV=iv;
   var bs=document.querySelectorAll(".ivb[data-iv]");
