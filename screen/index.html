@@ -295,7 +295,7 @@ function csv(){ if(!LAST.length){ alert("沒有結果"); return; }
   const keys=["c","n","g","px","pct","vol","val","ma5","ma20","ma60","bias20","rsi14","k","d","macdh","bb","dhi20","dhi60","dhi120","dlo60","vr5","vr20","turn","vol20","updays","dndays","f","t","tot","fstreak","tstreak","astreak","ratio","marg","note","disp"];
   const b=LAST.map(s=>keys.map(k=>s[k]==null?"":s[k]).join(",")).join("\n");
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([keys.join(",")+"\n"+b],{type:"text/csv"})); a.download="screen_"+(DATA.date||"")+".csv"; a.click(); }
-var CURCODE=null, CURIV="D", BARS={}, LCCHART=null;
+var CURCODE=null, CURIV="D", BARS={}, LCCHART=null, LCCS=null, LCVOL=null, LIVETIMER=null;
 function loadLC(cb){
   if(window.LightweightCharts) return cb();
   if(window.__lcWait){ setTimeout(function(){loadLC(cb);},250); return; }
@@ -307,8 +307,10 @@ function loadLC(cb){
   document.head.appendChild(s);
 }
 function dstr(d){ return d.slice(0,4)+"-"+d.slice(4,6)+"-"+d.slice(6,8); }
+function todayTW(){ var n=new Date(Date.now()+8*3600*1000); return n.toISOString().slice(0,10).replace(/-/g,""); }
+function isMktOpen(){ var n=new Date(Date.now()+8*3600*1000); var wd=n.getUTCDay(); if(wd===0||wd===6) return false; var m=n.getUTCHours()*60+n.getUTCMinutes(); return m>=540 && m<=815; }
 function weekly(bars){
-  var out=[], cur=null, wk=null;
+  var out=[], cur=null;
   bars.forEach(function(b){
     var y=+b[0].slice(0,4), m=+b[0].slice(4,6)-1, dd=+b[0].slice(6,8);
     var dt=new Date(Date.UTC(y,m,dd)); var dow=(dt.getUTCDay()+6)%7;
@@ -336,11 +338,11 @@ function draw(bars){
     crosshair:{mode:0}
   });
   LCCHART=ch;
-  var cs=ch.addCandlestickSeries({upColor:"#f6465d",downColor:"#0ecb81",borderUpColor:"#f6465d",borderDownColor:"#0ecb81",wickUpColor:"#f6465d",wickDownColor:"#0ecb81"});
-  cs.setData(bars.map(function(b){return {time:dstr(b[0]),open:b[1],high:b[2],low:b[3],close:b[4]};}));
-  var vol=ch.addHistogramSeries({priceFormat:{type:"volume"},priceScaleId:"",priceLineVisible:false,lastValueVisible:false});
-  vol.priceScale().applyOptions({scaleMargins:{top:0.82,bottom:0}});
-  vol.setData(bars.map(function(b){return {time:dstr(b[0]),value:b[5],color:(b[4]>=b[1]?"rgba(246,70,93,.45)":"rgba(14,203,129,.45)")};}));
+  LCCS=ch.addCandlestickSeries({upColor:"#f6465d",downColor:"#0ecb81",borderUpColor:"#f6465d",borderDownColor:"#0ecb81",wickUpColor:"#f6465d",wickDownColor:"#0ecb81"});
+  LCCS.setData(bars.map(function(b){return {time:dstr(b[0]),open:b[1],high:b[2],low:b[3],close:b[4]};}));
+  LCVOL=ch.addHistogramSeries({priceFormat:{type:"volume"},priceScaleId:"",priceLineVisible:false,lastValueVisible:false});
+  LCVOL.priceScale().applyOptions({scaleMargins:{top:0.82,bottom:0}});
+  LCVOL.setData(bars.map(function(b){return {time:dstr(b[0]),value:b[5],color:(b[4]>=b[1]?"rgba(246,70,93,.45)":"rgba(14,203,129,.45)")};}));
   var m5=ch.addLineSeries({color:"#ffb454",lineWidth:1,priceLineVisible:false,lastValueVisible:false});
   m5.setData(maLine(bars,5));
   var m20=ch.addLineSeries({color:"#6cb6ff",lineWidth:1,priceLineVisible:false,lastValueVisible:false});
@@ -348,6 +350,49 @@ function draw(bars){
   ch.timeScale().fitContent();
   if(window.ResizeObserver){ new ResizeObserver(function(){ ch.applyOptions({width:box.clientWidth,height:box.clientHeight}); }).observe(box); }
 }
+function liveQuote(code, cb){
+  var mis="https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_"+code+".tw&json=1&delay=0&_="+Date.now();
+  var urls=[
+    "https://api.allorigins.win/raw?url="+encodeURIComponent(mis),
+    "https://api.codetabs.com/v1/proxy?quest="+encodeURIComponent(mis)
+  ];
+  var i=0;
+  function tryNext(){
+    if(i>=urls.length){ cb(null); return; }
+    var u=urls[i++];
+    var ctl=(window.AbortController)?new AbortController():null;
+    var tm=setTimeout(function(){ if(ctl) ctl.abort(); }, 8000);
+    fetch(u,{signal:ctl?ctl.signal:undefined}).then(function(r){return r.text();}).then(function(t){
+      clearTimeout(tm);
+      var j=null; try{ j=JSON.parse(t); }catch(e){ try{ j=JSON.parse(t.slice(t.indexOf("{"))); }catch(e2){} }
+      var m=j&&j.msgArray&&j.msgArray[0];
+      if(m && m.c){ cb(m); } else { tryNext(); }
+    }).catch(function(){ clearTimeout(tm); tryNext(); });
+  }
+  tryNext();
+}
+function applyLive(m){
+  if(!m || !LCCS) return;
+  var d=m.d; if(!d) return;
+  var o=parseFloat(m.o), h=parseFloat(m.h), l=parseFloat(m.l);
+  var z=m.trade&&m.trade.z?parseFloat(m.trade.z):parseFloat(m.z);
+  if(isNaN(z)) z=parseFloat(m.pz);
+  if(isNaN(z)) return;
+  if(isNaN(o)||isNaN(h)||isNaN(l)) return;
+  var v=parseFloat(m.v); if(isNaN(v)) v=0;
+  var bar={time:dstr(d),open:o,high:h,low:l,close:z};
+  LCCS.update(bar);
+  LCVOL.update({time:bar.time,value:v,color:(z>=o?"rgba(246,70,93,.45)":"rgba(14,203,129,.45)")});
+  var t=m.t||""; 
+  el("charthint").textContent="日線 · 即時 "+t.slice(0,5)+"（延遲約 1 分）";
+}
+function startLive(code){
+  stopLive();
+  if(!isMktOpen()) return;
+  var tick=function(){ liveQuote(code,function(m){ if(CURCODE===code) applyLive(m); }); };
+  tick(); LIVETIMER=setInterval(tick, 60000);
+}
+function stopLive(){ if(LIVETIMER){ clearInterval(LIVETIMER); LIVETIMER=null; } }
 function showChart(code){
   var arr=(DATA&&DATA.stocks)?DATA.stocks:[]; var s=null;
   for(var i=0;i<arr.length;i++){ if(arr[i].c===code){ s=arr[i]; break; } }
@@ -355,22 +400,22 @@ function showChart(code){
   CURCODE=code;
   el("chartwrap").style.display="block";
   el("chartname").textContent=code+"  "+(s.n||"");
-  el("charthint").textContent=(CURIV==="W"?"週線":"日線")+" · 自建圖表（點右上可開 TradingView）";
+  el("charthint").textContent=(isMktOpen()?"日線 · 載入即時報價…":"日線 · 收盤資料");
   el("tvlink").href="https://www.tradingview.com/chart/?symbol="+encodeURIComponent("TWSE:"+code);
   loadLC(function(){
     var k=code.slice(0,1);
     function render(bars){ draw(CURIV==="W"?weekly(bars||[]):(bars||[])); }
-    if(BARS[k]){ render(BARS[k][code]); }
+    if(BARS[k]){ render(BARS[k][code]); startLive(code); }
     else {
       el("chartbox").innerHTML="<div class='tiny' style='padding:20px'>載入中…</div>";
       fetch("../data/tw_bars/"+k+".json?t="+Date.now()).then(function(r){return r.json();})
-        .then(function(d){ BARS[k]=d; render(d[code]); })
+        .then(function(d){ BARS[k]=d; render(d[code]); startLive(code); })
         .catch(function(e){ el("chartbox").innerHTML="<div class='tiny' style='padding:20px'>歷史資料載入失敗</div>"; });
     }
   });
   try{ el("chartwrap").scrollIntoView({behavior:"smooth",block:"nearest"}); }catch(e){}
 }
-function hideChart(){ el("chartwrap").style.display="none"; el("chartbox").innerHTML=""; if(LCCHART){try{LCCHART.remove();}catch(e){}LCCHART=null;} CURCODE=null; }
+function hideChart(){ stopLive(); el("chartwrap").style.display="none"; el("chartbox").innerHTML=""; if(LCCHART){try{LCCHART.remove();}catch(e){}LCCHART=null;} CURCODE=null; }
 function setIv(iv,btn){
   CURIV=iv;
   var bs=document.querySelectorAll(".ivb[data-iv]");
