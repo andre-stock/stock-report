@@ -1,0 +1,17 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>chart test</title>
+<style>body{margin:0;background:#0f1115}h2{color:#fff;font:14px sans-serif;margin:6px}div.c{height:520px;width:100%}</style></head><body>
+<h2>TWSE:2330</h2><div class="c" id="a"></div>
+<h2>NASDAQ:AAPL</h2><div class="c" id="b"></div>
+<script>
+function mk(id,sym){
+  var c=document.getElementById(id);
+  var w=document.createElement('div'); w.className='tradingview-widget-container'; w.style.cssText='height:100%;width:100%';
+  var i=document.createElement('div'); i.className='tradingview-widget-container__widget'; i.style.cssText='height:100%;width:100%';
+  w.appendChild(i);
+  var s=document.createElement('script'); s.type='text/javascript'; s.async=true;
+  s.src='https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+  s.textContent=JSON.stringify({autosize:true,symbol:sym,interval:'D',timezone:'Asia/Taipei',theme:'dark',style:'1',locale:'zh_TW',allow_symbol_change:true,withdateranges:true,support_host:'https://www.tradingview.com'});
+  w.appendChild(s); c.appendChild(w);
+}
+mk('a','TWSE:2330'); mk('b','NASDAQ:AAPL');
+</script></body></html>
