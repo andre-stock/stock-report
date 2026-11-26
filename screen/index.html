@@ -379,27 +379,34 @@ function startLive(code){
   tick(); LIVETIMER=setInterval(tick, 60000);
 }
 function stopLive(){ if(LIVETIMER){ clearInterval(LIVETIMER); LIVETIMER=null; } }
+var REC=null;
+function mergeBars(bars,extra){
+  if(!extra||!extra.length) return bars||[];
+  var m={}; (bars||[]).forEach(function(b){m[b[0]]=b;});
+  extra.forEach(function(b){m[b[0]]=b;});
+  return Object.keys(m).sort().map(function(k){return m[k];});
+}
 function showChart(code){
-  var arr=(DATA&&DATA.stocks)?DATA.stocks:[]; var s=null;
-  for(var i=0;i<arr.length;i++){ if(arr[i].c===code){ s=arr[i]; break; } }
-  if(!s) s={c:code,n:""};
+  var nm=""; var tr=document.querySelector("tr[data-c='"+code+"']"); if(tr&&tr.children[1]) nm=tr.children[1].textContent;
   CURCODE=code;
   el("chartwrap").style.display="block";
-  el("chartname").textContent=code+"  "+(s.n||"");
-  el("charthint").textContent=(isMktOpen()?"日線 · 載入即時報價…":"日線 · 收盤資料");
+  el("chartname").textContent=code+"  "+nm;
+  el("charthint").textContent=((typeof isMktOpen==="function"?isMktOpen():mktOpen())?"日線 · 載入即時報價…":"日線 · 收盤資料");
   el("tvlink").href="https://www.tradingview.com/chart/?symbol="+encodeURIComponent("TWSE:"+code);
   loadLC(function(){
-    var k=code.slice(0,1);
-    function render(bars){ draw(CURIV==="W"?weekly(bars||[]):(bars||[])); }
-    if(BARS[k]){ render(BARS[k][code]); startLive(code); }
-    else {
-      el("chartbox").innerHTML="<div class='tiny' style='padding:20px'>載入中…</div>";
-      fetch("../data/tw_bars/"+k+".json?t="+Date.now()).then(function(r){return r.json();})
-        .then(function(d){ BARS[k]=d; render(d[code]); startLive(code); })
-        .catch(function(e){ el("chartbox").innerHTML="<div class='tiny' style='padding:20px'>歷史資料載入失敗</div>"; });
+    var k=code.slice(0,2);
+    function render(bars){ bars=mergeBars(bars,REC?REC[code]:null); draw(CURIV==="W"?weekly(bars||[]):(bars||[])); }
+    function go(){
+      if(BARS[k]){ render(BARS[k][code]); startLive(code); }
+      else{
+        el("chartbox").innerHTML="<div style='padding:20px;color:#8b949e'>載入中…</div>";
+        fetch("../data/tw_bars/"+k+".json?t="+Date.now()).then(function(r){return r.json();}).then(function(d){BARS[k]=d;render(d[code]);startLive(code);}).catch(function(){el("chartbox").innerHTML="<div style='padding:20px;color:#8b949e'>歷史資料載入失敗</div>";});
+      }
     }
+    if(REC){ go(); }
+    else{ fetch("../data/recent.json?t="+Date.now()).then(function(r){return r.json();}).then(function(d){REC=d;go();}).catch(function(){REC={};go();}); }
   });
-  try{ el("chartwrap").scrollIntoView({behavior:"smooth",block:"nearest"}); }catch(e){}
+  try{el("chartwrap").scrollIntoView({behavior:"smooth",block:"nearest"});}catch(e){}
 }
 function hideChart(){ stopLive(); el("chartwrap").style.display="none"; el("chartbox").innerHTML=""; if(LCCHART){try{LCCHART.remove();}catch(e){}LCCHART=null;} CURCODE=null; }
 function setIv(iv,btn){
