@@ -29,6 +29,16 @@ td.l,th.l{text-align:left}
 .pos{color:#5ee08a}.neg{color:#ff7b72}.warn{color:#ffd166}
 .note{color:#8b949e;font-size:11px;margin-top:8px;line-height:1.6}
 .tiny{font-size:11px;color:#8b949e}
+tr.clk{cursor:pointer}tr.clk:hover td{background:#1c2431}
+#chartwrap{margin-top:12px;display:none}
+#chartcard{background:#161a21;border:1px solid #2a2f37;border-radius:8px;padding:8px}
+#charthead{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+#chartname{font-weight:600;font-size:14px}
+#chartbox{height:460px;width:100%;border-radius:6px;overflow:hidden;background:#0f1115}
+#chartbox iframe{width:100%!important}
+.ivb{display:inline-block;background:#232a33;border:1px solid #2a2f37;color:#c9d1d9;border-radius:5px;padding:4px 10px;font-size:12px;cursor:pointer;text-decoration:none}
+.ivb.on{background:#2d6cdf;border-color:#2d6cdf;color:#fff;font-weight:600}
+@media(max-width:600px){#chartbox{height:380px}}
 </style></head><body>
 <h1>台股篩選器</h1>
 <div class="nav"><a href="../">← 首頁</a><a href="../tw/">台股日報</a><a href="../us/">美股日報</a><a class="act">台股篩選</a><a href="../us-screen/">美股篩選</a></div>
@@ -70,6 +80,18 @@ td.l,th.l{text-align:left}
 </div>
 
 <div id="result"></div>
+<div id="chartwrap"><div id="chartcard">
+  <div id="charthead">
+    <span id="chartname">—</span><span class="tiny" id="charthint">點表格任一列即可看 K 線</span>
+    <span style="flex:1"></span>
+    <button class="ivb on" data-iv="D" onclick="setIv('D',this)">日K</button>
+    <button class="ivb" data-iv="60" onclick="setIv('60',this)">60分</button>
+    <button class="ivb" data-iv="15" onclick="setIv('15',this)">15分</button>
+    <a class="ivb" id="tvlink" target="_blank" rel="noopener" href="#">TradingView ↗</a>
+    <button class="ivb" onclick="hideChart()">✕ 關閉</button>
+  </div>
+  <div id="chartbox"></div>
+</div></div>
 <div class="note">資料來源：證交所公開資料（日線 130 日、三大法人 130 日）。<br>「距 N 日高」= 目前股價在 N 日高點下方幾 %（越小＝越靠近高點）；「週轉率」= 成交量 ÷ 發行股數。<br>「組合配方」＝把多個條件綁成一個勾選項（含歷史判斷），不同於單一指標條件。<br>本頁為客觀數據篩選，非投資建議。</div>
 
 <script>
@@ -242,7 +264,7 @@ function run(){
     const fixedCells = dyn ? "" : ("<td>"+(s.vr20==null?"-":s.vr20+"x")+"</td><td>"+(s.dhi60==null?"-":s.dhi60+"%")+"</td>"
       +"<td>"+(s.rsi14==null?"-":s.rsi14)+"</td><td>"+(s.turn==null?"-":s.turn+"%")+"</td>"
       +"<td class='"+fc+"'>"+(s.f==null?"-":s.f)+"</td><td class='"+tc+"'>"+(s.tot==null?"-":s.tot)+"</td>");
-    return "<tr>"+baseCells+condCells+fixedCells+"<td class='l'>"+flag+"</td>"+mcell+"</tr>";
+    return "<tr class='clk' data-c='"+s.c+"'>"+baseCells+condCells+fixedCells+"<td class='l'>"+flag+"</td>"+mcell+"</tr>";
   }).join("");
   const heads = ["代號","名稱","族群","收盤","漲幅"]
     .concat(dyn ? ACTIVE.map(a=>{ const c=byId(a.id); return c.t+(c.num?(" "+a.cmp+a.th+c.u):""); }) : ["量比14","距60日高","RSI","週轉率","外資","三大"])
@@ -273,6 +295,53 @@ function csv(){ if(!LAST.length){ alert("沒有結果"); return; }
   const keys=["c","n","g","px","pct","vol","val","ma5","ma20","ma60","bias20","rsi14","k","d","macdh","bb","dhi20","dhi60","dhi120","dlo60","vr5","vr20","turn","vol20","updays","dndays","f","t","tot","fstreak","tstreak","astreak","ratio","marg","note","disp"];
   const b=LAST.map(s=>keys.map(k=>s[k]==null?"":s[k]).join(",")).join("\n");
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([keys.join(",")+"\n"+b],{type:"text/csv"})); a.download="screen_"+(DATA.date||"")+".csv"; a.click(); }
+var MKT="TW", CURCODE=null, CURIV="D", TVLOADING=false;
+function ensureTV(cb){
+  if(window.TradingView) return cb();
+  if(TVLOADING){ setTimeout(function(){ ensureTV(cb); },300); return; }
+  TVLOADING=true;
+  var s=document.createElement("script");
+  s.src="https://s3.tradingview.com/tv.js";
+  s.onload=function(){ cb(); };
+  s.onerror=function(){ el("charthint").textContent="TradingView 載入失敗（檢查網路或廣告封鎖）"; TVLOADING=false; };
+  document.head.appendChild(s);
+}
+function tvSym(code){ return (MKT==="US") ? code : ("TWSE:"+code); }
+function showChart(code){
+  var arr=(DATA&&DATA.stocks)?DATA.stocks:[];
+  var s=null; for(var i=0;i<arr.length;i++){ if(arr[i].c===code){ s=arr[i]; break; } }
+  if(!s) s={c:code,n:""};
+  CURCODE=code;
+  el("chartwrap").style.display="block";
+  el("chartname").textContent=code+"  "+(s.n||"");
+  el("charthint").textContent=(MKT==="US")?"美股 · TradingView 延遲報價":"台股 · TradingView 延遲報價";
+  el("tvlink").href="https://www.tradingview.com/chart/?symbol="+encodeURIComponent(tvSym(code));
+  el("chartbox").innerHTML="";
+  ensureTV(function(){
+    el("chartbox").innerHTML="";
+    new TradingView.widget({
+      container_id:"chartbox", autosize:true, symbol:tvSym(code), interval:CURIV,
+      timezone:(MKT==="US"?"America/New_York":"Asia/Taipei"),
+      theme:"dark", style:"1", locale:"zh_TW", toolbar_bg:"#0f1115",
+      enable_publishing:false, hide_side_toolbar:false, allow_symbol_change:true,
+      withdateranges:true, save_image:false, studies:["Volume@tv-basicstudies"]
+    });
+  });
+  try{ el("chartwrap").scrollIntoView({behavior:"smooth",block:"nearest"}); }catch(e){}
+}
+function hideChart(){ el("chartwrap").style.display="none"; el("chartbox").innerHTML=""; CURCODE=null; }
+function setIv(iv,btn){
+  CURIV=iv;
+  var bs=document.querySelectorAll(".ivb[data-iv]");
+  for(var i=0;i<bs.length;i++) bs[i].className="ivb"+(bs[i]===btn?" on":"");
+  if(CURCODE) showChart(CURCODE);
+}
+el("result").addEventListener("click",function(e){
+  var t=e.target;
+  while(t && t!==this && !(t.tagName==="TR" && t.className.indexOf("clk")>=0)) t=t.parentNode;
+  if(t && t!==this && t.getAttribute("data-c")) showChart(t.getAttribute("data-c"));
+});
+
 loadWatch(); setMode("all"); render();
 fetch("../data/screen.json?t="+Date.now()).then(r=>r.json()).then(d=>{ DATA=d;
   if(!d.stocks||!d.stocks.length){ el("meta").textContent="尚無資料（日報產生後即可使用）"; return; }
