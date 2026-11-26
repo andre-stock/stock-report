@@ -358,7 +358,7 @@ function showChart(code){
   el("charthint").textContent=(CURIV==="W"?"週線":"日線")+" · 自建圖表（點右上可開 TradingView）";
   el("tvlink").href="https://www.tradingview.com/chart/?symbol="+encodeURIComponent("TWSE:"+code);
   loadLC(function(){
-    var k=code.slice(0,2);
+    var k=code.slice(0,1);
     function render(bars){ draw(CURIV==="W"?weekly(bars||[]):(bars||[])); }
     if(BARS[k]){ render(BARS[k][code]); }
     else {
