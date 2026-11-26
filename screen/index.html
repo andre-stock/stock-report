@@ -295,18 +295,29 @@ function csv(){ if(!LAST.length){ alert("沒有結果"); return; }
   const keys=["c","n","g","px","pct","vol","val","ma5","ma20","ma60","bias20","rsi14","k","d","macdh","bb","dhi20","dhi60","dhi120","dlo60","vr5","vr20","turn","vol20","updays","dndays","f","t","tot","fstreak","tstreak","astreak","ratio","marg","note","disp"];
   const b=LAST.map(s=>keys.map(k=>s[k]==null?"":s[k]).join(",")).join("\n");
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([keys.join(",")+"\n"+b],{type:"text/csv"})); a.download="screen_"+(DATA.date||"")+".csv"; a.click(); }
-var MKT="TW", CURCODE=null, CURIV="D", TVLOADING=false;
-function ensureTV(cb){
-  if(window.TradingView) return cb();
-  if(TVLOADING){ setTimeout(function(){ ensureTV(cb); },300); return; }
-  TVLOADING=true;
-  var s=document.createElement("script");
-  s.src="https://s3.tradingview.com/tv.js";
-  s.onload=function(){ cb(); };
-  s.onerror=function(){ el("charthint").textContent="TradingView 載入失敗（檢查網路或廣告封鎖）"; TVLOADING=false; };
-  document.head.appendChild(s);
-}
+var MKT="TW", CURCODE=null, CURIV="D";
 function tvSym(code){ return (MKT==="US") ? code : ("TWSE:"+code); }
+function renderTV(sym){
+  var box=el("chartbox"); box.innerHTML="";
+  var c=document.createElement("div");
+  c.className="tradingview-widget-container"; c.style.cssText="height:100%;width:100%";
+  var inner=document.createElement("div");
+  inner.className="tradingview-widget-container__widget"; inner.style.cssText="height:100%;width:100%";
+  c.appendChild(inner);
+  var s=document.createElement("script");
+  s.type="text/javascript"; s.async=true;
+  s.src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+  s.textContent=JSON.stringify({
+    autosize:true, symbol:sym, interval:CURIV,
+    timezone:(MKT==="US"?"America/New_York":"Asia/Taipei"),
+    theme:"dark", style:"1", locale:"zh_TW", toolbar_bg:"#0f1115",
+    enable_publishing:false, hide_side_toolbar:false, allow_symbol_change:true,
+    withdateranges:true, save_image:false, studies:["Volume@tv-basicstudies"],
+    support_host:"https://www.tradingview.com"
+  });
+  c.appendChild(s);
+  box.appendChild(c);
+}
 function showChart(code){
   var arr=(DATA&&DATA.stocks)?DATA.stocks:[];
   var s=null; for(var i=0;i<arr.length;i++){ if(arr[i].c===code){ s=arr[i]; break; } }
@@ -314,19 +325,9 @@ function showChart(code){
   CURCODE=code;
   el("chartwrap").style.display="block";
   el("chartname").textContent=code+"  "+(s.n||"");
-  el("charthint").textContent=(MKT==="US")?"美股 · TradingView 延遲報價":"台股 · TradingView 延遲報價";
+  el("charthint").textContent=(MKT==="US")?"美股 · TradingView":"台股 · TradingView";
   el("tvlink").href="https://www.tradingview.com/chart/?symbol="+encodeURIComponent(tvSym(code));
-  el("chartbox").innerHTML="";
-  ensureTV(function(){
-    el("chartbox").innerHTML="";
-    new TradingView.widget({
-      container_id:"chartbox", autosize:true, symbol:tvSym(code), interval:CURIV,
-      timezone:(MKT==="US"?"America/New_York":"Asia/Taipei"),
-      theme:"dark", style:"1", locale:"zh_TW", toolbar_bg:"#0f1115",
-      enable_publishing:false, hide_side_toolbar:false, allow_symbol_change:true,
-      withdateranges:true, save_image:false, studies:["Volume@tv-basicstudies"]
-    });
-  });
+  renderTV(tvSym(code));
   try{ el("chartwrap").scrollIntoView({behavior:"smooth",block:"nearest"}); }catch(e){}
 }
 function hideChart(){ el("chartwrap").style.display="none"; el("chartbox").innerHTML=""; CURCODE=null; }
