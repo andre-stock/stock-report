@@ -329,6 +329,21 @@ function maLine(bars,n){
   for(var i=0;i<bars.length;i++){ sum+=bars[i][4]; if(i>=n) sum-=bars[i-n][4]; if(i>=n-1) out.push({time:dstr(bars[i][0]), value:sum/n}); }
   return out;
 }
+var LINES=[];
+function addLevelLines(){
+  if(!LCCS||!LEV||!CURCODE) return;
+  var a=LEV[CURCODE]; if(!a) return;
+  for(var i=0;i<LINES.length;i++){ try{LCCS.removePriceLine(LINES[i]);}catch(e){} }
+  LINES=[];
+  function mk(price,color,style,title){
+    if(price==null) return;
+    try{ LINES.push(LCCS.createPriceLine({price:price,color:color,lineWidth:1,lineStyle:style,axisLabelVisible:true,title:title})); }catch(e){}
+  }
+  mk(a.hi252,"#ff7b72",2,"52週高");
+  mk(a.lo252,"#0ecb81",2,"52週低");
+  mk(a.lo20,"#3ddc84",3,"20日低");
+  mk(a.ma60,"#8b949e",2,"MA60");
+}
 function draw(bars){
   var box=el("chartbox"); box.innerHTML="";
   if(!bars || !bars.length){ box.innerHTML="<div class='tiny' style='padding:20px'>此股沒有歷史資料</div>"; return; }
@@ -352,6 +367,7 @@ function draw(bars){
   m20.setData(maLine(bars,20));
   ch.timeScale().fitContent();
   if(window.ResizeObserver){ new ResizeObserver(function(){ ch.applyOptions({width:box.clientWidth,height:box.clientHeight}); }).observe(box); }
+  addLevelLines();
 }
 function liveQuote(code, cb){
   fetch("../data/rt.json?t="+Date.now()).then(function(r){ return r.json(); }).then(function(d){
@@ -403,6 +419,7 @@ function showLevels(code){
       + "<span class='"+cls(a.hi252)+"'>52週高 "+f(a.hi252)+"</span>"
       + "<span class='"+cls(a.lo252)+"'>52週低 "+f(a.lo252)+"</span>"
       + "<span class='"+cls(a.lo20)+"'>20日低 "+f(a.lo20)+"</span>";
+    if(typeof addLevelLines==="function") addLevelLines();
   });
 }
 function showChart(code){
